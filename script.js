@@ -9,18 +9,23 @@ const globalAudio = new Audio();
 let currentTrackId = null;
 let allTracksData = []; 
 let allCommentsData = []; 
+let allProfilesData = []; // Все профили пользователей
+let allRepliesData = []; // Все ответы на комменты
 let currentCategory = 'Главное меню';
 let ratingTrackId = null;
 let currentUserRating = null;
 let previousVolume = 1;
+
 let currentUserId = null;
+let currentUserProfile = null;
 
 let isShuffle = false;
 let repeatMode = 0; 
 let currentSort = 'rating';
+let currentCommentsSort = 'likes'; 
 
-// Переменные для кастомного подтверждения
 let confirmCallback = null;
+let activeReplyTo = null; // ID комментария, на который отвечаем
 
 // --- ХЕЛПЕРЫ ---
 function escapeHtml(str) {
@@ -36,10 +41,8 @@ function showToast(message, type = 'success') {
     const icon = type === 'success' 
         ? `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`
         : `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
-
     toast.className = `bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl border-l-4 ${borderColor} flex items-center gap-3 transition-all duration-300 translate-y-[-20px] opacity-0 pointer-events-auto`;
     toast.innerHTML = `<div class="${textColor}">${icon}</div><span class="font-medium text-sm">${message}</span>`;
-    
     container.appendChild(toast);
     setTimeout(() => toast.classList.remove('translate-y-[-20px]', 'opacity-0'), 10);
     setTimeout(() => { toast.classList.add('translate-y-[-20px]', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3500);
@@ -52,35 +55,95 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-// --- КАСТОМНЫЙ CONFIRM ---
-window.showConfirm = function(text, callback) {
-    document.getElementById('confirm-text').innerText = text;
-    confirmCallback = callback;
-    document.getElementById('confirm-modal').classList.remove('hidden');
+// --- ПРОФИЛИ ---
+async function fetchProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) return data;
+    return { id: userId, username: 'User_' + userId.substring(0, 4), avatar_url: null };
 }
 
-window.closeConfirmModal = function() {
-    document.getElementById('confirm-modal').classList.add('hidden');
-    confirmCallback = null;
+async function updateProfileUI() {
+    if (!currentUserId) {
+        document.getElementById('login-btn').classList.remove('hidden');
+        document.getElementById('user-profile').classList.add('hidden');
+        return;
+    }
+    
+    currentUserProfile = await fetchProfile(currentUserId);
+    
+    document.getElementById('login-btn').classList.add('hidden');
+    document.getElementById('user-profile').classList.remove('hidden');
+    document.getElementById('user-username-display').innerText = currentUserProfile.username;
+    document.getElementById('user-email-display').innerText = (await supabase.auth.getSession()).data.session.user.email;
+    
+    const avatarImg = document.getElementById('user-avatar-img');
+    const avatarLetter = document.getElementById('user-avatar-letter');
+    
+    if (currentUserProfile.avatar_url) {
+        avatarImg.src = currentUserProfile.avatar_url;
+        avatarImg.classList.remove('hidden');
+        avatarLetter.classList.add('hidden');
+    } else {
+        avatarImg.classList.add('hidden');
+        avatarLetter.classList.remove('hidden');
+        avatarLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase();
+    }
 }
 
-window.executeConfirm = async function() {
-    if (confirmCallback) await confirmCallback();
-    closeConfirmModal();
+window.openProfileModal = function() {
+    if (!currentUserProfile) return;
+    document.getElementById('settings-username').value = currentUserProfile.username;
+    document.getElementById('settings-avatar').value = currentUserProfile.avatar_url || '';
+    
+    // Превью
+    const previewImg = document.getElementById('settings-avatar-preview');
+    const previewLetter = document.getElementById('settings-avatar-letter');
+    if (currentUserProfile.avatar_url) {
+        previewImg.src = currentUserProfile.avatar_url;
+        previewImg.classList.remove('hidden');
+        previewLetter.classList.add('hidden');
+    } else {
+        previewImg.classList.add('hidden');
+        previewLetter.classList.remove('hidden');
+        previewLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase();
+    }
+    
+    document.getElementById('profile-modal').classList.remove('hidden');
+}
+
+window.closeProfileModal = () => document.getElementById('profile-modal').classList.add('hidden');
+
+window.saveProfile = async function() {
+    const newUsername = document.getElementById('settings-username').value.trim();
+    const newAvatar = document.getElementById('settings-avatar').value.trim();
+    
+    if (!newUsername) return showToast('Никнейм не может быть пустым', 'error');
+    
+    const { error } = await supabase.from('profiles').upsert({
+        id: currentUserId,
+        username: newUsername,
+        avatar_url: newAvatar || null
+    });
+    
+    if (error) {
+        showToast('Ошибка сохранения: ' + error.message, 'error');
+    } else {
+        showToast('Профиль обновлён!', 'success');
+        closeProfileModal();
+        await updateProfileUI();
+        await loadData(); // Перезагружаем данные, чтобы новые аватарки подтянулись в комменты
+    }
 }
 
 // --- АВТОРИЗАЦИЯ ---
-supabase.auth.onAuthStateChange((event, session) => {
+supabase.auth.onAuthStateChange(async (event, session) => {
     if (session) {
         currentUserId = session.user.id;
-        document.getElementById('login-btn').classList.add('hidden');
-        document.getElementById('user-profile').classList.remove('hidden');
-        document.getElementById('user-email-display').innerText = session.user.email;
-        document.getElementById('user-avatar-letter').innerText = session.user.email.charAt(0).toUpperCase();
+        await updateProfileUI();
     } else {
         currentUserId = null;
-        document.getElementById('login-btn').classList.remove('hidden');
-        document.getElementById('user-profile').classList.add('hidden');
+        currentUserProfile = null;
+        await updateProfileUI();
     }
 });
 
@@ -92,11 +155,16 @@ window.handleLogin = async function() {
     const password = document.getElementById('login-password').value;
     if(!email || !password) return showToast("Введи email и пароль!", "error");
     
-    let { error } = await supabase.auth.signInWithPassword({ email, password });
+    let { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error && error.message.includes('Invalid login credentials')) {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
-        else { showToast('Аккаунт создан! Вы вошли.', 'success'); closeLoginModal(); }
+        else { 
+            showToast('Аккаунт создан! Вы вошли.', 'success'); 
+            // Создаем профиль по умолчанию
+            await supabase.from('profiles').insert({ id: signUpData.user.id, username: 'User_' + signUpData.user.id.substring(0, 4) });
+            closeLoginModal(); 
+        }
     } else if (error) {
         showToast('Ошибка: ' + error.message, 'error');
     } else {
@@ -107,6 +175,21 @@ window.handleLogin = async function() {
 window.logout = async function() { 
     await supabase.auth.signOut(); 
     showToast('Вы вышли из аккаунта', 'success');
+}
+
+// --- CONFIRM ---
+window.showConfirm = function(text, callback) {
+    document.getElementById('confirm-text').innerText = text;
+    confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+window.closeConfirmModal = function() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    confirmCallback = null;
+}
+window.executeConfirm = async function() {
+    if (confirmCallback) await confirmCallback();
+    closeConfirmModal();
 }
 
 // --- ПЛЕЕР ---
@@ -285,7 +368,7 @@ window.toggleMute = function() {
     else { changeVolume(previousVolume || 1); }
 }
 
-// --- ОЦЕНКА И КОММЕНТАРИИ ---
+// --- ОЦЕНКА ---
 window.openRatingModal = function(trackId) {
     const track = allTracksData.find(t => t.id === trackId);
     if (!track) return;
@@ -310,7 +393,6 @@ window.openRatingModal = function(trackId) {
         document.getElementById('rating-comment').value = '';
         deleteBtn.classList.add('hidden');
     }
-
     updateTotalScore();
     document.getElementById('rating-modal').classList.remove('hidden');
 }
@@ -342,30 +424,19 @@ window.submitRating = async function() {
 
     const user = session.user;
     const { error } = await supabase.from('ratings').upsert({ 
-        user_id: user.id, 
-        track_id: ratingTrackId, 
-        score: totalScore,
-        comment: commentText || null
+        user_id: user.id, track_id: ratingTrackId, score: totalScore, comment: commentText || null
     }, { onConflict: 'user_id, track_id' });
 
     if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { 
-        showToast('Оценка сохранена!', 'success');
-        closeRatingModal(); 
-        await loadData(); 
-    }
+    else { showToast('Оценка сохранена!', 'success'); closeRatingModal(); await loadData(); }
 }
 
 window.promptDeleteRating = function() {
     if (!ratingTrackId || !currentUserRating) return;
     showConfirm('Ты уверен, что хочешь удалить свою оценку и комментарий?', async () => {
         const { error } = await supabase.from('ratings').delete().match({ id: currentUserRating.id });
-        if (error) showToast('Ошибка при удалении: ' + error.message, 'error');
-        else {
-            showToast('Оценка удалена', 'success');
-            closeRatingModal();
-            await loadData();
-        }
+        if (error) showToast('Ошибка: ' + error.message, 'error');
+        else { showToast('Удалено', 'success'); closeRatingModal(); await loadData(); }
     });
 }
 
@@ -380,91 +451,103 @@ window.promptDeleteComment = function(ratingId) {
 // --- ЛАЙКИ (ОПТИМИСТИЧНЫЕ) ---
 window.likeTrack = async function(trackId, event) {
     event.stopPropagation();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return showToast('Войди, чтобы ставить лайки!', 'error');
-
-    const user = session.user;
+    if (!currentUserId) return showToast('Войди, чтобы ставить лайки!', 'error');
     const track = allTracksData.find(t => t.id === trackId);
     if (!track) return;
 
-    // 1. Мгновенно обновляем UI
     const wasLiked = track.userLiked;
     track.userLiked = !wasLiked;
     track.likesCount += wasLiked ? -1 : 1;
-    
-    // Перерисовываем список треков локально (мгновенно)
     renderTracksList(); 
 
-    // 2. Отправляем запрос в фон
     if (wasLiked) {
-        const { error } = await supabase.from('track_likes').delete().match({ user_id: user.id, track_id: trackId });
-        if (error) { // Откат при ошибке
-            track.userLiked = true; track.likesCount++; renderTracksList();
-            showToast('Ошибка при удалении лайка', 'error');
-        }
+        const { error } = await supabase.from('track_likes').delete().match({ user_id: currentUserId, track_id: trackId });
+        if (error) { track.userLiked = true; track.likesCount++; renderTracksList(); }
     } else {
-        const { error } = await supabase.from('track_likes').insert({ user_id: user.id, track_id: trackId });
-        if (error) { // Откат при ошибке
-            track.userLiked = false; track.likesCount--; renderTracksList();
-            showToast('Ошибка при лайке', 'error');
-        }
+        const { error } = await supabase.from('track_likes').insert({ user_id: currentUserId, track_id: trackId });
+        if (error) { track.userLiked = false; track.likesCount--; renderTracksList(); }
     }
 }
 
 window.likeComment = async function(ratingId, event) {
     event.stopPropagation();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return showToast('Войди, чтобы ставить лайки!', 'error');
-
-    const user = session.user;
+    if (!currentUserId) return showToast('Войди, чтобы ставить лайки!', 'error');
     const comment = allCommentsData.find(c => c.id === ratingId);
     if (!comment) return;
 
-    // 1. Мгновенно обновляем UI
     const wasLiked = comment.userLiked;
     comment.userLiked = !wasLiked;
     comment.likesCount += wasLiked ? -1 : 1;
-    
-    renderCommentsView(); // Перерисовываем комменты
+    renderCommentsView(); 
 
-    // 2. Фоновый запрос
     if (wasLiked) {
-        const { error } = await supabase.from('comment_likes').delete().match({ user_id: user.id, rating_id: ratingId });
-        if (error) {
-            comment.userLiked = true; comment.likesCount++; renderCommentsView();
-        }
+        const { error } = await supabase.from('comment_likes').delete().match({ user_id: currentUserId, rating_id: ratingId });
+        if (error) { comment.userLiked = true; comment.likesCount++; renderCommentsView(); }
     } else {
-        const { error } = await supabase.from('comment_likes').insert({ user_id: user.id, rating_id: ratingId });
-        if (error) {
-            comment.userLiked = false; comment.likesCount--; renderCommentsView();
-        }
+        const { error } = await supabase.from('comment_likes').insert({ user_id: currentUserId, rating_id: ratingId });
+        if (error) { comment.userLiked = false; comment.likesCount--; renderCommentsView(); }
     }
 }
 
-// --- СОРТИРОВКА ---
-window.changeSort = function(sortType) {
-    currentSort = sortType;
-    renderView();
+// --- ОТВЕТЫ НА КОММЕНТАРИИ ---
+window.toggleReplyBox = function(ratingId) {
+    const box = document.getElementById(`reply-box-${ratingId}`);
+    if (box) {
+        box.classList.toggle('hidden');
+        if (!box.classList.contains('hidden')) document.getElementById(`reply-input-${ratingId}`).focus();
+    }
 }
+
+window.submitReply = async function(ratingId) {
+    if (!currentUserId) return showToast('Войди, чтобы отвечать!', 'error');
+    const input = document.getElementById(`reply-input-${ratingId}`);
+    const text = input.value.trim();
+    if (!text) return;
+
+    const { error } = await supabase.from('replies').insert({
+        rating_id: ratingId,
+        user_id: currentUserId,
+        content: text
+    });
+
+    if (error) showToast('Ошибка: ' + error.message, 'error');
+    else {
+        showToast('Ответ добавлен', 'success');
+        input.value = '';
+        await loadData();
+        // Оставляем открытым, если хотим
+    }
+}
+
+window.deleteReply = function(replyId) {
+    showConfirm('Удалить свой ответ?', async () => {
+        const { error } = await supabase.from('replies').delete().match({ id: replyId });
+        if (error) showToast('Ошибка: ' + error.message, 'error');
+        else { showToast('Удалено', 'success'); await loadData(); }
+    });
+}
+
+// --- СОРТИРОВКА ---
+window.changeSort = function(sortType) { currentSort = sortType; renderView(); }
+window.changeCommentsSort = function(sortType) { currentCommentsSort = sortType; renderCommentsView(); }
 
 // --- ЗАГРУЗКА ДАННЫХ ---
 async function loadData() {
-    const { data: { session } } = await supabase.auth.getSession();
-    currentUserId = session ? session.user.id : null;
-
-    const [tracksRes, ratingsRes, trackLikesRes, commentLikesRes] = await Promise.all([
+    const [tracksRes, ratingsRes, trackLikesRes, commentLikesRes, profilesRes, repliesRes] = await Promise.all([
         supabase.from('tracks').select('*'),
         supabase.from('ratings').select('*'), 
         supabase.from('track_likes').select('*'),
-        supabase.from('comment_likes').select('*')
+        supabase.from('comment_likes').select('*'),
+        supabase.from('profiles').select('*'), // Тянем все профили
+        supabase.from('replies').select('*')   // Тянем все ответы
     ]);
-
-    if (tracksRes.error) return console.error(tracksRes.error);
 
     const tracks = tracksRes.data || [];
     const ratings = ratingsRes.data || [];
     const trackLikes = trackLikesRes.data || [];
     const commentLikes = commentLikesRes.data || [];
+    allProfilesData = profilesRes.data || [];
+    allRepliesData = repliesRes.data || [];
 
     const ratingsByTrack = new Map();
     ratings.forEach(r => {
@@ -516,6 +599,12 @@ async function loadData() {
         .map(r => {
             const cLikes = likesByComment.get(r.id) || [];
             const track = tracks.find(t => t.id === r.track_id);
+            const profile = allProfilesData.find(p => p.id === r.user_id) || { username: 'User', avatar_url: null };
+            const replies = allRepliesData.filter(rep => rep.rating_id === r.id).map(rep => {
+                const repProfile = allProfilesData.find(p => p.id === rep.user_id) || { username: 'User', avatar_url: null };
+                return { ...rep, username: repProfile.username, avatar_url: repProfile.avatar_url, isOwn: currentUserId === rep.user_id };
+            });
+            
             return {
                 ...r,
                 likesCount: cLikes.length,
@@ -523,7 +612,10 @@ async function loadData() {
                 trackTitle: track ? track.title : 'Неизвестный трек',
                 trackArtist: track ? track.artist : '',
                 trackCover: track ? track.cover_url : '',
-                isOwn: currentUserId === r.user_id
+                isOwn: currentUserId === r.user_id,
+                username: profile.username,
+                avatar_url: profile.avatar_url,
+                replies: replies
             };
         });
 
@@ -550,11 +642,7 @@ function renderCategories() {
     container.innerHTML = htmlParts.join('');
 }
 
-window.changeCategory = function(cat) {
-    currentCategory = cat;
-    renderCategories();
-    renderView();
-}
+window.changeCategory = function(cat) { currentCategory = cat; renderCategories(); renderView(); }
 
 function renderView() {
     const heroContainer = document.getElementById('hero-container');
@@ -562,22 +650,13 @@ function renderView() {
     const commentsViewContainer = document.getElementById('comments-view-container');
 
     if (currentCategory === 'Главное меню') {
-        listViewContainer.classList.add('hidden');
-        commentsViewContainer.classList.add('hidden');
-        heroContainer.classList.remove('hidden');
-        renderHero();
+        listViewContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); heroContainer.classList.remove('hidden'); renderHero();
     } else if (currentCategory === 'Комментарии') {
-        heroContainer.classList.add('hidden');
-        listViewContainer.classList.add('hidden');
-        commentsViewContainer.classList.remove('hidden');
-        renderCommentsView();
+        heroContainer.classList.add('hidden'); listViewContainer.classList.add('hidden'); commentsViewContainer.classList.remove('hidden'); renderCommentsView();
     } else {
-        heroContainer.classList.add('hidden');
-        commentsViewContainer.classList.add('hidden');
-        listViewContainer.classList.remove('hidden');
+        heroContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); listViewContainer.classList.remove('hidden');
         document.getElementById('current-category-title').innerText = currentCategory === 'Все' ? 'Все треки' : currentCategory;
-        document.getElementById('sort-select').value = currentSort;
-        renderTracksList();
+        document.getElementById('sort-select').value = currentSort; renderTracksList();
     }
 }
 
@@ -617,11 +696,8 @@ function renderHero() {
 
 function renderTracksList() {
     const container = document.getElementById('tracks-container');
-    
     let filteredTracks = allTracksData;
-    if (currentCategory !== 'Все') {
-        filteredTracks = allTracksData.filter(t => t.category === currentCategory);
-    }
+    if (currentCategory !== 'Все') filteredTracks = allTracksData.filter(t => t.category === currentCategory);
 
     filteredTracks.sort((a, b) => {
         if (currentSort === 'newest') return new Date(b.created_at) - new Date(a.created_at);
@@ -630,16 +706,14 @@ function renderTracksList() {
         return b.avgScore - a.avgScore; 
     });
 
-    if (filteredTracks.length === 0) {
-        container.innerHTML = `<p class="text-center text-gray-400 py-10">Здесь пока пусто</p>`; return;
-    }
+    if (filteredTracks.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 py-10">Здесь пока пусто</p>`; return; }
 
     const htmlParts = filteredTracks.map(track => {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
         const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
         const trackIdArg = Number(track.id);
         
-        // Обновленная иконка лайка (чуть больше и без фона)
+        // ФИКС: Сердечко теперь аккуратное, фон круглый только при наведении
         const heartIcon = track.userLiked 
             ? `<svg class="w-6 h-6 text-red-500 fill-current transition-transform scale-110" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
             : `<svg class="w-6 h-6 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
@@ -669,12 +743,12 @@ function renderTracksList() {
                     <div class="text-[10px] text-gray-500">${track.votesCount} оц.</div>
                 </div>
                 
-                <div class="w-24 text-center shrink-0 flex justify-center">
-                    <!-- Убрали кривой фон, сделали кнопку аккуратным кружком -->
-                    <button onclick="likeTrack(${trackIdArg}, event)" class="flex items-center gap-1.5 p-2 rounded-full hover:bg-white/5 transition-all active:scale-90" title="Поставить лайк">
+                <!-- ИСПРАВЛЕННЫЙ БЛОК ЛАЙКА -->
+                <div class="w-24 text-center shrink-0 flex justify-center items-center gap-1">
+                    <button onclick="likeTrack(${trackIdArg}, event)" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Поставить лайк">
                         ${heartIcon}
-                        <span class="text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-4 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span>
                     </button>
+                    <span class="text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span>
                 </div>
 
                 <div class="w-32 text-right shrink-0">
@@ -683,19 +757,18 @@ function renderTracksList() {
             </div>
         `;
     });
-
     container.innerHTML = htmlParts.join('');
 }
 
 function renderCommentsView() {
     const container = document.getElementById('comments-list');
-    
     if (allCommentsData.length === 0) {
         container.innerHTML = `<div class="text-gray-400 text-center py-10 bg-white/5 rounded-2xl border border-white/10">Пока нет комментариев. Стань первым!</div>`;
         return;
     }
 
     const sortedComments = [...allCommentsData].sort((a, b) => {
+        if (currentCommentsSort === 'newest') return new Date(b.created_at) - new Date(a.created_at);
         if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
         return new Date(b.created_at) - new Date(a.created_at);
     });
@@ -703,42 +776,75 @@ function renderCommentsView() {
     const htmlParts = sortedComments.map(comment => {
         const dateStr = new Date(comment.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
         
-        // Увеличенные иконки для комментов
         const heartIcon = comment.userLiked
             ? `<svg class="w-5 h-5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
             : `<svg class="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
 
-        // Увеличенная кнопка удаления
         const deleteBtn = comment.isOwn 
-            ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                <span class="text-xs font-bold">Удалить</span>
-               </button>` 
+            ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg><span class="text-xs font-bold">Удалить</span></button>` 
             : '';
+
+        // Рендер ответов
+        const repliesHtml = comment.replies.map(rep => {
+            const repDate = new Date(rep.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            const repDeleteBtn = rep.isOwn 
+                ? `<button onclick="deleteReply(${rep.id})" class="text-gray-500 hover:text-red-400 ml-2 transition-colors" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
+            
+            return `
+                <div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                        ${rep.avatar_url ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`}
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-baseline mb-1">
+                            <span class="text-xs font-bold text-green-400">${escapeHtml(rep.username)}</span>
+                            <div class="flex items-center">
+                                <span class="text-[10px] text-gray-500 mr-2">${repDate}</span>
+                                ${repDeleteBtn}
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-300">${escapeHtml(rep.content)}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         return `
             <div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10">
-                <img src="${comment.trackCover ? escapeHtml(comment.trackCover) : 'https://via.placeholder.com/100?text=No+Cover'}" class="w-16 h-16 rounded-xl object-cover shadow-lg shrink-0">
+                <div class="w-12 h-12 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
+                    ${comment.avatar_url ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-lg font-bold text-gray-300">${escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`}
+                </div>
+                
                 <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-start mb-2">
+                    <div class="flex justify-between items-start mb-1">
                         <div>
-                            <h4 class="text-sm font-bold text-white truncate cursor-pointer hover:underline" onclick="playTrack(${comment.track_id})">${escapeHtml(comment.trackTitle)}</h4>
-                            <p class="text-xs text-gray-400 truncate">${escapeHtml(comment.trackArtist || 'TrueEstimation')}</p>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-sm font-bold text-white">${escapeHtml(comment.username)}</span>
+                                <span class="text-[10px] text-gray-500">${dateStr}</span>
+                            </div>
+                            <h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-green-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] text-gray-500 whitespace-nowrap">${dateStr}</span>
-                            ${deleteBtn}
-                        </div>
+                        <div class="flex items-center">${deleteBtn}</div>
                     </div>
-                    <p class="text-sm text-gray-200 leading-relaxed mb-4">"${escapeHtml(comment.comment)}"</p>
+                    
+                    <p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p>
                     
                     <div class="flex items-center gap-3">
-                        <!-- Увеличенная кнопка лайка -->
                         <button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">
                             ${heartIcon}
                             <span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span>
                         </button>
                         <div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div>
+                        <button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button>
+                    </div>
+
+                    <!-- БЛОК ОТВЕТОВ -->
+                    <div class="mt-2">${repliesHtml}</div>
+
+                    <!-- ИНПУТ ДЛЯ ОТВЕТА -->
+                    <div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2">
+                        <input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-green-500">
+                        <button onclick="submitReply(${comment.id})" class="bg-green-500 hover:bg-green-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors">Отправить</button>
                     </div>
                 </div>
             </div>
@@ -746,6 +852,21 @@ function renderCommentsView() {
     });
     container.innerHTML = htmlParts.join('');
 }
+
+// Живой предпросмотр аватарки при вводе ссылки в настройках
+document.getElementById('settings-avatar')?.addEventListener('input', function(e) {
+    const url = e.target.value.trim();
+    const previewImg = document.getElementById('settings-avatar-preview');
+    const previewLetter = document.getElementById('settings-avatar-letter');
+    if (url) {
+        previewImg.src = url;
+        previewImg.classList.remove('hidden');
+        previewLetter.classList.add('hidden');
+    } else {
+        previewImg.classList.add('hidden');
+        previewLetter.classList.remove('hidden');
+    }
+});
 
 // Инициализация
 loadData();
