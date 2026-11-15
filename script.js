@@ -151,12 +151,52 @@ function updateGlobalPlayPauseIcon(isPlaying) {
     }
 }
 
+// --- ФИКС ХИТБОКСОВ (Клик по любой точке) ---
+document.getElementById('progress-container').addEventListener('mousedown', function(e) {
+    // Игнорируем клик по нативному инпуту, чтобы не было двойного срабатывания
+    if (e.target.tagName.toLowerCase() === 'input') return;
+    
+    const rect = this.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    
+    if (globalAudio.duration) {
+        const newTime = percent * globalAudio.duration;
+        globalAudio.currentTime = newTime;
+        document.getElementById('global-progress-bar').style.width = `${percent * 100}%`;
+        document.getElementById('global-slider').value = newTime;
+        document.getElementById('global-current-time').innerText = formatTime(newTime);
+        updateThumbPosition('progress', percent);
+    }
+});
+
+document.getElementById('volume-container').addEventListener('mousedown', function(e) {
+    if (e.target.tagName.toLowerCase() === 'input') return;
+    
+    const rect = this.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    changeVolume(percent);
+    updateThumbPosition('volume', percent);
+});
+
+// Вспомогательная функция для перемещения визуального кружка
+function updateThumbPosition(type, percent) {
+    const thumb = document.getElementById(`${type}-thumb`);
+    if (thumb) {
+        thumb.style.left = `${percent * 100}%`;
+        // Если громкость на нуле, скрываем кружок
+        if (type === 'volume' && percent === 0) thumb.style.opacity = '0';
+        else if (percent > 0) thumb.style.opacity = '1';
+    }
+}
+
+// --- ОБНОВЛЕНИЕ ПРИ ВОСПРОИЗВЕДЕНИИ ---
 globalAudio.addEventListener('timeupdate', () => {
     if (!globalAudio.duration) return;
     const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
     document.getElementById('global-progress-bar').style.width = `${percent}%`;
     document.getElementById('global-slider').value = globalAudio.currentTime;
     document.getElementById('global-current-time').innerText = formatTime(globalAudio.currentTime);
+    updateThumbPosition('progress', percent / 100);
 });
 
 globalAudio.addEventListener('loadedmetadata', () => {
@@ -168,13 +208,21 @@ globalAudio.addEventListener('ended', () => {
     playNext();
 });
 
-window.seekGlobalAudio = function(value) { globalAudio.currentTime = value; }
+window.seekGlobalAudio = function(value) { 
+    globalAudio.currentTime = value; 
+    if (globalAudio.duration) {
+        const percent = value / globalAudio.duration;
+        document.getElementById('global-progress-bar').style.width = `${percent * 100}%`;
+        updateThumbPosition('progress', percent);
+    }
+}
 
 window.changeVolume = function(value) {
     globalAudio.volume = value;
     previousVolume = value;
     document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
     document.getElementById('global-volume-slider').value = value;
+    updateThumbPosition('volume', value);
     
     const icon = document.getElementById('volume-icon');
     if(value == 0) {
@@ -337,7 +385,6 @@ function renderHero() {
     const isPlayingThis = currentTrackId === topTrack.id && !globalAudio.paused;
     const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-1" d="M8 5v14l11-7z"/>`;
 
-    // УМЕНЬШЕНЫ РАЗМЕРЫ: Обложка w-48 md:w-56, паддинги p-6 md:p-8, шрифты меньше
     heroContainer.innerHTML = `
         <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-6 md:p-8 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group mt-2 w-full max-w-3xl mx-auto">
             <div class="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl"></div>
