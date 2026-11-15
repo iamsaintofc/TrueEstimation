@@ -1,1 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя Музыка</title>
+    <!-- Подключаем красивый дизайн (Tailwind) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans p-6">
+    <div class="max-w-2xl mx-auto">
+        
+        <!-- Шапка с авторизацией -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-gray-800 p-4 rounded-xl shadow-lg gap-4">
+            <h1 class="text-2xl font-bold text-green-400">🎵 Мой Бит</h1>
+            
+            <!-- Форма входа (скрыта, если вошел) -->
+            <div id="auth-section" class="flex gap-2">
+                <input type="email" id="email" placeholder="Email" class="p-2 rounded text-black w-32 md:w-auto">
+                <input type="password" id="password" placeholder="Пароль" class="p-2 rounded text-black w-32 md:w-auto">
+                <button onclick="login()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded font-bold text-black transition">Войти</button>
+            </div>
+            
+            <!-- Инфо о юзере (скрыта, если не вошел) -->
+            <div id="user-info" class="hidden items-center gap-4">
+                <span id="user-email" class="text-gray-400 text-sm"></span>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded font-bold transition">Выйти</button>
+            </div>
+        </div>
 
+        <!-- Сюда будут загружаться треки -->
+        <div id="tracks-container" class="space-y-6">
+            <p class="text-center text-gray-400">Загрузка треков...</p>
+        </div>
+
+    </div>
+
+    <!-- Подключаем наш скрипт -->
+    <script type="module" src="script.js"></script>
+</body>
+</html>
