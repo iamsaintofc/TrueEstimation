@@ -347,13 +347,15 @@ window.openUserProfile = function(userId) {
     if (isAdmin) {
         const against = allReportsData.filter(r => r.target_user_id === userId || (r.target_username || '').toLowerCase() === (p.username || '').toLowerCase()).length;
         const sent = allReportsData.filter(r => r.user_id === userId).length;
-        adminBlock = `<div class="mt-5 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
-            <div class="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">Для админа</div>
+        adminBlock = `<div class="mt-5 p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
+            <div class="text-xs font-bold text-cyan-300 uppercase tracking-wider mb-2">Для админа</div>
             <div class="text-sm text-gray-300">Email: <span class="text-white">${escapeHtml(p.email || '—')}</span></div>
             <div class="text-sm text-gray-300">Жалоб на пользователя: <span class="font-bold ${against ? 'text-red-400' : 'text-white'}">${against}</span> · отправил обращений: <span class="text-white font-bold">${sent}</span></div>
             ${(!isMaster && !isSelf) ? `<button onclick="closeUserProfile(); toggleAdminStatus('${p.id}', ${!!p.is_admin}, '${escapeHtml(p.email || '')}')" class="mt-3 ${p.is_admin ? 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white' : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-black'} px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">${p.is_admin ? 'Снять админа' : 'Выдать админа'}</button>` : ''}
         </div>`;
     }
+
+    if (isAdmin && adminBlock) adminBlock = adminBlock.replace(/<\/div>\s*$/, `${banControls(p)}</div>`);
 
     const actions = isSelf
         ? `<button onclick="closeUserProfile(); openProfileModal()" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2.5 rounded-xl text-sm transition-colors neon-btn">Редактировать профиль</button>`
@@ -365,8 +367,8 @@ window.openUserProfile = function(userId) {
             <div class="flex items-end gap-4">
                 ${avatarMarkup(p, 'w-24 h-24 border-4 !border-gray-900', 'text-4xl')}
                 <div class="pb-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap"><h3 class="text-2xl font-extrabold truncate ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(p.username)}</h3>
-                    ${isTargetAdmin ? '<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>' : ''}</div>
+                    <div class="flex items-center gap-2 flex-wrap"><h3 class="text-2xl font-extrabold truncate ${isTargetAdmin ? 'text-cyan-200' : 'text-white'}">${escapeHtml(p.username)}</h3>
+                    ${isTargetAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}${banBadge(p)}</div>
                     ${isSelf ? '<div class="text-xs text-cyan-400">Это ты</div>' : ''}
                 </div>
             </div>
@@ -457,7 +459,7 @@ async function updateProfileUI() {
         document.getElementById('login-btn').classList.remove('hidden'); 
         document.getElementById('user-profile').classList.add('hidden'); 
         document.getElementById('nav-admin').classList.add('hidden'); 
-        isAdmin = false; 
+        isAdmin = false; currentUserProfile = null; renderBanBanner();
         return; 
     }
     currentUserProfile = await fetchProfile(currentUserId);
@@ -496,15 +498,15 @@ async function updateProfileUI() {
     }
     
     if (isAdmin) { 
-        avatarBtn.classList.add('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); 
+        avatarBtn.classList.add('ring-2', 'ring-cyan-300', 'shadow-[0_0_15px_rgba(34,211,238,0.6)]'); 
         adminBadge.classList.remove('hidden'); 
         navAdmin.classList.remove('hidden'); 
     } else { 
-        avatarBtn.classList.remove('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); 
+        avatarBtn.classList.remove('ring-2', 'ring-cyan-300', 'shadow-[0_0_15px_rgba(34,211,238,0.6)]'); 
         adminBadge.classList.add('hidden'); 
         navAdmin.classList.add('hidden'); 
     }
-    updateProfilePreview();
+    updateProfilePreview(); renderBanBanner();
 }
 
 function updateProfilePreview() {
@@ -649,6 +651,7 @@ window.toggleAdminStatus = async function(targetUserId, currentStatus, targetEma
 window.openCreatePlaylistModal = function() { if (!currentUserId) return showToast('Войди, чтобы создавать плейлисты', 'error'); document.getElementById('create-playlist-modal').classList.remove('hidden'); }
 window.closeCreatePlaylistModal = () => document.getElementById('create-playlist-modal').classList.add('hidden');
 window.createPlaylist = async function() {
+    if (guardBan()) return;
     const name = document.getElementById('new-playlist-name').value.trim();
     if (!name) return showToast('Введи название', 'error');
     const { error } = await supabase.from('playlists').insert({ user_id: currentUserId, name });
@@ -664,7 +667,7 @@ window.deletePlaylist = function(playlistId, event) {
     }, 'delete');
 }
 window.openAddToPlaylistModal = function(trackId) {
-    if (!currentUserId) return showToast('Войди!', 'error');
+    if (!currentUserId) return showToast('Войди!', 'error'); if (guardBan()) return; 
     currentTrackToAddToPlaylist = trackId; const container = document.getElementById('playlists-to-add-container');
     if (userPlaylists.length === 0) container.innerHTML = `<p class="text-sm text-gray-400 text-center py-4">У вас пока нет плейлистов.</p>`;
     else container.innerHTML = userPlaylists.map(pl => `<button onclick="addTrackToPlaylist(${pl.id})" class="w-full text-left px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm font-bold text-white neon-border">${escapeHtml(pl.name)}</button>`).join('');
@@ -672,6 +675,7 @@ window.openAddToPlaylistModal = function(trackId) {
 }
 window.closeAddToPlaylistModal = () => document.getElementById('add-to-playlist-modal').classList.add('hidden');
 window.addTrackToPlaylist = async function(playlistId) {
+    if (guardBan()) return;
     const { error } = await supabase.from('playlist_tracks').insert({ playlist_id: playlistId, track_id: currentTrackToAddToPlaylist });
     if (error && error.code === '23505') showToast('Трек уже есть в этом плейлисте', 'error');
     else if (error) showToast('Ошибка: ' + error.message, 'error');
@@ -739,15 +743,15 @@ globalAudio.addEventListener('play', updateVolumeUI);
 window.openRatingModal = function(trackId) { const track = allTracksData.find(t => t.id === trackId); if (!track) return; ratingTrackId = trackId; document.getElementById('modal-track-title').innerText = track.title; document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation'; const coverImg = document.getElementById('modal-track-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; } currentUserRating = track.userRating; const deleteBtn = document.getElementById('delete-rating-btn'); if (currentUserRating) { for(let i=1; i<=5; i++) document.getElementById(`crit-${i}`).value = 3; document.getElementById('rating-comment').value = currentUserRating.comment || ''; deleteBtn.classList.remove('hidden'); } else { for(let i=1; i<=5; i++) { document.getElementById(`crit-${i}`).value = 3; document.getElementById(`val-crit-${i}`).innerText = '3 / 6'; } document.getElementById('rating-comment').value = ''; deleteBtn.classList.add('hidden'); } updateTotalScore(); document.getElementById('rating-modal').classList.remove('hidden'); }
 window.closeRatingModal = function() { document.getElementById('rating-modal').classList.add('hidden'); ratingTrackId = null; currentUserRating = null; }
 window.updateTotalScore = function() { let total = 0; for(let i=1; i<=5; i++) { const val = parseInt(document.getElementById(`crit-${i}`).value); document.getElementById(`val-crit-${i}`).innerText = `${val} / 6`; total += val; } document.getElementById('modal-total-score').innerText = total; }
-window.submitRating = async function() { if (!ratingTrackId) return; const { data: { session } } = await supabase.auth.getSession(); if (!session) { showToast('Сначала войди!', 'error'); closeRatingModal(); return; } let totalScore = 0; for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value); const commentText = document.getElementById('rating-comment').value.trim(); const { error } = await supabase.from('ratings').upsert({ user_id: session.user.id, track_id: ratingTrackId, score: totalScore, comment: commentText || null }, { onConflict: 'user_id, track_id' }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Оценка сохранена!', 'success'); closeRatingModal(); await loadData(); } }
+window.submitRating = async function() { if (!ratingTrackId) return; if (guardBan()) return;  const { data: { session } } = await supabase.auth.getSession(); if (!session) { showToast('Сначала войди!', 'error'); closeRatingModal(); return; } let totalScore = 0; for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value); const commentText = document.getElementById('rating-comment').value.trim(); const { error } = await supabase.from('ratings').upsert({ user_id: session.user.id, track_id: ratingTrackId, score: totalScore, comment: commentText || null }, { onConflict: 'user_id, track_id' }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Оценка сохранена!', 'success'); closeRatingModal(); await loadData(); } }
 window.promptDeleteRating = function() { if (!ratingTrackId || !currentUserRating) return; showConfirm('Удалить свою оценку?', async () => { const { error } = await supabase.from('ratings').delete().match({ id: currentUserRating.id }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Удалено', 'success'); closeRatingModal(); await loadData(); } }, 'delete'); }
 window.promptDeleteComment = function(ratingId) { showConfirm('Удалить этот комментарий?', async () => { const { error } = await supabase.from('ratings').delete().match({ id: ratingId }); if (error) showToast('Ошибка (возможно, нет прав): ' + error.message, 'error'); else { showToast('Удалено', 'success'); await loadData(); } }, 'delete'); }
-window.likeTrack = async function(trackId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); const track = allTracksData.find(t => t.id === trackId); if (!track) return; const wasLiked = track.userLiked; track.userLiked = !wasLiked; track.likesCount += wasLiked ? -1 : 1; renderTracksList(); if (wasLiked) { const { error } = await supabase.from('track_likes').delete().match({ user_id: currentUserId, track_id: trackId }); if (error) { track.userLiked = true; track.likesCount++; renderTracksList(); } } else { const { error } = await supabase.from('track_likes').insert({ user_id: currentUserId, track_id: trackId }); if (error) { track.userLiked = false; track.likesCount--; renderTracksList(); } } }
-window.likeComment = async function(ratingId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); const comment = allCommentsData.find(c => c.id === ratingId); if (!comment) return; const wasLiked = comment.userLiked; comment.userLiked = !wasLiked; comment.likesCount += wasLiked ? -1 : 1; renderCommentsView(); if (wasLiked) { const { error } = await supabase.from('comment_likes').delete().match({ user_id: currentUserId, rating_id: ratingId }); if (error) { comment.userLiked = true; comment.likesCount++; renderCommentsView(); } } else { const { error } = await supabase.from('comment_likes').insert({ user_id: currentUserId, rating_id: ratingId }); if (error) { comment.userLiked = false; comment.likesCount--; renderCommentsView(); } } }
-window.likeReply = async function(replyId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); const reply = allCommentsData.flatMap(c => c.replies || []).find(r => r.id === replyId); if (!reply) return; const wasLiked = reply.userLiked; reply.userLiked = !wasLiked; reply.likesCount += wasLiked ? -1 : 1; renderCommentsView(); if (wasLiked) { const { error } = await supabase.from('reply_likes').delete().match({ user_id: currentUserId, reply_id: replyId }); if (error) { reply.userLiked = true; reply.likesCount++; renderCommentsView(); showToast('Ошибка: ' + error.message, 'error'); } } else { const { error } = await supabase.from('reply_likes').insert({ user_id: currentUserId, reply_id: replyId }); if (error) { reply.userLiked = false; reply.likesCount--; renderCommentsView(); showToast('Ошибка: ' + error.message, 'error'); } } }
+window.likeTrack = async function(trackId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); if (guardBan()) return;  const track = allTracksData.find(t => t.id === trackId); if (!track) return; const wasLiked = track.userLiked; track.userLiked = !wasLiked; track.likesCount += wasLiked ? -1 : 1; renderTracksList(); if (wasLiked) { const { error } = await supabase.from('track_likes').delete().match({ user_id: currentUserId, track_id: trackId }); if (error) { track.userLiked = true; track.likesCount++; renderTracksList(); } } else { const { error } = await supabase.from('track_likes').insert({ user_id: currentUserId, track_id: trackId }); if (error) { track.userLiked = false; track.likesCount--; renderTracksList(); } } }
+window.likeComment = async function(ratingId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); if (guardBan()) return;  const comment = allCommentsData.find(c => c.id === ratingId); if (!comment) return; const wasLiked = comment.userLiked; comment.userLiked = !wasLiked; comment.likesCount += wasLiked ? -1 : 1; renderCommentsView(); if (wasLiked) { const { error } = await supabase.from('comment_likes').delete().match({ user_id: currentUserId, rating_id: ratingId }); if (error) { comment.userLiked = true; comment.likesCount++; renderCommentsView(); } } else { const { error } = await supabase.from('comment_likes').insert({ user_id: currentUserId, rating_id: ratingId }); if (error) { comment.userLiked = false; comment.likesCount--; renderCommentsView(); } } }
+window.likeReply = async function(replyId, event) { event.stopPropagation(); if (!currentUserId) return showToast('Войди!', 'error'); if (guardBan()) return;  const reply = allCommentsData.flatMap(c => c.replies || []).find(r => r.id === replyId); if (!reply) return; const wasLiked = reply.userLiked; reply.userLiked = !wasLiked; reply.likesCount += wasLiked ? -1 : 1; renderCommentsView(); if (wasLiked) { const { error } = await supabase.from('reply_likes').delete().match({ user_id: currentUserId, reply_id: replyId }); if (error) { reply.userLiked = true; reply.likesCount++; renderCommentsView(); showToast('Ошибка: ' + error.message, 'error'); } } else { const { error } = await supabase.from('reply_likes').insert({ user_id: currentUserId, reply_id: replyId }); if (error) { reply.userLiked = false; reply.likesCount--; renderCommentsView(); showToast('Ошибка: ' + error.message, 'error'); } } }
 window.toggleReplyBox = function(ratingId) { const box = document.getElementById(`reply-box-${ratingId}`); if (box) { box.classList.toggle('hidden'); if (!box.classList.contains('hidden')) document.getElementById(`reply-input-${ratingId}`).focus(); } }
 window.replyToUser = function(commentId, username) { document.getElementById(`reply-box-${commentId}`).classList.remove('hidden'); const input = document.getElementById(`reply-input-${commentId}`); input.value = `@${username} `; input.focus(); }
-window.submitReply = async function(ratingId) { if (!currentUserId) return showToast('Войди!', 'error'); const input = document.getElementById(`reply-input-${ratingId}`); const text = input.value.trim(); if (!text) return; const { error } = await supabase.from('replies').insert({ rating_id: ratingId, user_id: currentUserId, content: text }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Ответ добавлен', 'success'); input.value = ''; await loadData(); } }
+window.submitReply = async function(ratingId) { if (!currentUserId) return showToast('Войди!', 'error'); if (guardBan()) return;  const input = document.getElementById(`reply-input-${ratingId}`); const text = input.value.trim(); if (!text) return; const { error } = await supabase.from('replies').insert({ rating_id: ratingId, user_id: currentUserId, content: text }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Ответ добавлен', 'success'); input.value = ''; await loadData(); } }
 window.deleteReply = function(replyId) { showConfirm('Удалить этот ответ?', async () => { const { error } = await supabase.from('replies').delete().match({ id: replyId }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Удалено', 'success'); await loadData(); } }, 'delete'); }
 window.changeSort = function(sortType) { currentSort = sortType; renderView(); }
 window.changeCommentsSort = function(sortType) { currentCommentsSort = sortType; renderCommentsView(); }
@@ -868,9 +872,12 @@ function renderCategories() {
         if(document.getElementById('nav-comments')) document.getElementById('nav-comments').setAttribute('class', currentCategory === 'Комментарии' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left neon-text' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left');
         if(document.getElementById('nav-liked')) document.getElementById('nav-liked').setAttribute('class', currentCategory === 'Liked' ? 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left neon-text' : 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left');
         
+        const navCls = key => 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors text-left ' + (currentCategory === key ? 'bg-white/10 text-white neon-text' : 'text-gray-300 hover:text-white hover:bg-white/10');
+        document.getElementById('nav-top')?.setAttribute('class', navCls('TopTracks')); document.getElementById('nav-ranking')?.setAttribute('class', navCls('UserRanking'));
+
         const adminBtnClass = currentCategory === 'AdminPanel' 
-            ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 transition-colors text-left' 
-            : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left';
+            ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-cyan-200 transition-colors text-left neon-text' 
+            : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-cyan-200 hover:text-white hover:bg-cyan-500/10 transition-colors text-left';
         if(document.getElementById('nav-admin')) document.getElementById('nav-admin').setAttribute('class', isAdmin ? adminBtnClass : `${adminBtnClass} hidden`);
 
         userPlaylists.forEach(pl => {
@@ -915,6 +922,7 @@ function renderView() {
 
         heroContainer.classList.add('hidden'); listViewContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); adminViewContainer.classList.add('hidden');
         adminViewContainer.classList.remove('flex');
+        document.getElementById('top-view-container')?.classList.add('hidden'); document.getElementById('ranking-view-container')?.classList.add('hidden');
 
         if (currentCategory === 'Главное меню') { 
             heroContainer.classList.remove('hidden'); 
@@ -922,6 +930,10 @@ function renderView() {
         } else if (currentCategory === 'Комментарии') { 
             commentsViewContainer.classList.remove('hidden'); 
             renderCommentsView(); 
+        } else if (currentCategory === 'TopTracks') {
+            document.getElementById('top-view-container').classList.remove('hidden'); renderTopTracks();
+        } else if (currentCategory === 'UserRanking') {
+            document.getElementById('ranking-view-container').classList.remove('hidden'); renderUserRanking();
         } else if (currentCategory === 'AdminPanel') {
             if (!isAdmin) { changeCategory('Главное меню'); return; }
             adminViewContainer.classList.remove('hidden'); 
@@ -971,7 +983,7 @@ function renderHero() {
                 </div>
             </div>
             
-            <h2 class="text-4xl md:text-6xl font-extrabold mb-2 tracking-tight z-10 line-clamp-1 text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-500 drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">${escapeHtml(topTrack.title)}</h2>
+            <h2 class="text-4xl md:text-6xl font-extrabold mb-2 tracking-tight z-10 line-clamp-1 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 to-cyan-500 drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">${escapeHtml(topTrack.title)}</h2>
             <p class="text-lg text-gray-300 mb-8 z-10 font-medium tracking-wide">${escapeHtml(topTrack.artist || 'TrueEstimation')}</p>
             
             <div class="flex flex-col md:flex-row items-center justify-center gap-8 z-10 w-full">
@@ -1015,11 +1027,11 @@ function renderTracksList() {
 
         const htmlParts = filteredTracks.map(track => {
             const isPlayingThis = currentTrackId === track.id && !globalAudio.paused; const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`; const trackIdArg = Number(track.id);
-            const heartIcon = track.userLiked ? `<svg class="w-4 h-4 md:w-5 md:h-5 text-red-500 fill-current drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+            const heartIcon = track.userLiked ? `<svg class="w-4 h-4 md:w-5 md:h-5 text-cyan-300 fill-current drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-cyan-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const playlistIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>`;
             const shareIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>`;
 
-            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-28 md:w-32 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
+            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-28 md:w-32 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-cyan-300' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
@@ -1033,19 +1045,21 @@ function renderAdminPanel() {
     if(!tbody || !reportsTbody) return;
     
     // РЕНДЕР ПОЛЬЗОВАТЕЛЕЙ
-    const users = allProfilesData.filter(p => p.email); 
-    if (users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Не найдено</td></tr>`; } 
+    const q = (document.getElementById('admin-users-search')?.value || '').trim().toLowerCase();
+    const users = allProfilesData.filter(p => p.email && (!q || (p.username || '').toLowerCase().includes(q) || p.email.toLowerCase().includes(q)))
+        .sort((x, y) => (isBannedNow(y) - isBannedNow(x)) || ((y.is_admin ? 1 : 0) - (x.is_admin ? 1 : 0)));
+    if (users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Не найдено</td></tr>`; }
     else {
         tbody.innerHTML = users.map(u => {
-            const isTargetAdmin = u.is_admin;
-            const isMasterAdmin = u.email === MASTER_ADMIN_EMAIL;
+            const isTargetAdmin = u.is_admin, isMasterAdmin = u.email === MASTER_ADMIN_EMAIL, banned = isBannedNow(u);
             let actionBtn = '';
-            if (isMasterAdmin) {
-                actionBtn = `<span class="text-xs text-gray-500 font-bold">Главный админ</span>`;
-            } else {
-                actionBtn = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true, '${u.email}')" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять</button>` : `<button onclick="toggleAdminStatus('${u.id}', false, '${u.email}')" class="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать</button>`;
+            if (isMasterAdmin) actionBtn = `<span class="text-xs text-gray-500 font-bold">Главный админ</span>`;
+            else {
+                const adm = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true, '${escapeHtml(u.email)}')" class="bg-white/5 text-gray-300 hover:bg-white/15 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять админа</button>` : `<button onclick="toggleAdminStatus('${u.id}', false, '${escapeHtml(u.email)}')" class="bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать админа</button>`;
+                actionBtn = `<div class="flex justify-end gap-2 flex-wrap">${adm}${banControls(u, true)}</div>`;
             }
-            return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4"><button onclick="openUserProfile('${u.id}')" class="flex items-center gap-3 text-left group">${avatarMarkup(u)}<span class="font-bold text-sm group-hover:underline ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></button></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Юзер</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
+            const status = banned ? `<span class="ban-badge">БАН</span><div class="text-[10px] text-gray-500 mt-1">${u.banned_until ? 'до ' + fmtDate(u.banned_until) : 'навсегда'}${u.ban_reason ? ' · ' + escapeHtml(u.ban_reason) : ''}</div>` : (isTargetAdmin ? '<span class="admin-badge">ADMIN</span>' : '<span class="text-gray-500 text-sm">Юзер</span>');
+            return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors ${banned ? 'bg-red-500/5' : ''}"><td class="p-4"><button onclick="openUserProfile('${u.id}')" class="flex items-center gap-3 text-left group">${avatarMarkup(u)}<span class="font-bold text-sm group-hover:underline ${isTargetAdmin ? 'text-cyan-200' : 'text-white'} ${banned ? 'line-through opacity-70' : ''}">${escapeHtml(u.username)}</span></button></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${status}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
         }).join('');
     }
 
@@ -1102,9 +1116,9 @@ function renderCommentsView() {
         const sortedComments = [...allCommentsData].sort((a, b) => { if (currentCommentsSort === 'newest') return new Date(b.created_at) - new Date(a.created_at); if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount; return new Date(b.created_at) - new Date(a.created_at); });
         const htmlParts = sortedComments.map(comment => {
             const dateStr = new Date(comment.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
-            const heartIcon = comment.userLiked ? `<svg class="w-5 h-5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+            const heartIcon = comment.userLiked ? `<svg class="w-5 h-5 text-cyan-300 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-5 h-5 text-gray-400 group-hover:text-cyan-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const deleteBtn = comment.isOwn ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
-            const authorAdminBadge = comment.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
+            const authorAdminBadge = comment.isAdmin ? `<span class="admin-badge ml-2">ADMIN</span>` : '';
             
             const isCommentUrl = comment.avatar_url && comment.avatar_url.startsWith('http');
             const commentAvatarHtml = isCommentUrl ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-sm md:text-lg font-bold text-white" style="color: ${comment.avatar_bg === '#ffffff' ? 'black' : 'white'}">${comment.avatar_url || escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`;
@@ -1113,16 +1127,16 @@ function renderCommentsView() {
             const repliesHtml = comment.replies.map(rep => {
                 const repDate = new Date(rep.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
                 const repDeleteBtn = rep.isOwn ? `<button onclick="deleteReply(${rep.id})" class="text-gray-500 hover:text-red-400 ml-2 transition-colors" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
-                const repHeart = rep.userLiked ? `<svg class="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 text-gray-500 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
-                const repAdminBadge = rep.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
+                const repHeart = rep.userLiked ? `<svg class="w-4 h-4 text-cyan-300 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 text-gray-500 hover:text-cyan-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+                const repAdminBadge = rep.isAdmin ? `<span class="admin-badge ml-2">ADMIN</span>` : '';
                 
                 const isRepUrl = rep.avatar_url && rep.avatar_url.startsWith('http');
                 const repAvatarHtml = isRepUrl ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-white" style="color: ${rep.avatar_bg === '#ffffff' ? 'black' : 'white'}">${rep.avatar_url || escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`;
                 const repBgStyle = isRepUrl ? '' : `background-color: ${rep.avatar_bg || '#1e293b'}`;
 
-                return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span onclick="openUserProfile('${rep.user_id}')" class="text-xs font-bold cursor-pointer hover:underline ${rep.isAdmin ? 'text-red-400' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
+                return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span onclick="openUserProfile('${rep.user_id}')" class="text-xs font-bold cursor-pointer hover:underline ${rep.isAdmin ? 'text-cyan-200' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-cyan-300' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
             }).join('');
-            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${levelChip(comment.user_id)}${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
+            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-cyan-200' : 'text-white'}">${escapeHtml(comment.username)}</span>${levelChip(comment.user_id)}${authorAdminBadge}${banBadgeById(comment.user_id)}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-cyan-300' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
@@ -1136,7 +1150,7 @@ updateVolumeUI();
 // ==========================================
 // УВЕДОМЛЕНИЯ
 // ==========================================
-const NOTIF_ICONS = { reply: '💬', like: '❤️', support_reply: '🛟', support_resolved: '✅', admin_granted: '🛡️', admin_revoked: '⚠️' };
+const NOTIF_ICONS = { banned: '⛔', unbanned: '🔓', reply: '💬', like: '❤️', support_reply: '🛟', support_resolved: '✅', admin_granted: '🛡️', admin_revoked: '⚠️' };
 
 function timeAgo(d) {
     const s = Math.max(1, Math.floor((Date.now() - new Date(d).getTime()) / 1000));
@@ -1185,7 +1199,7 @@ function subscribeNotifications() {
             renderNotifications();
             showToast(`${NOTIF_ICONS[n.type] || '🔔'} ${n.message}`, 'success');
             if (n.type.startsWith('support')) refreshReports();
-            if (n.type.startsWith('admin')) updateProfileUI().then(() => loadData());
+            if (n.type.startsWith('admin') || n.type === 'banned' || n.type === 'unbanned') updateProfileUI().then(() => loadData());
         })
         .subscribe();
 }
@@ -1517,7 +1531,7 @@ function renderChat(keepScrollIfUp) {
 }
 
 window.sendMessage = async function() {
-    if (!currentUserId || !activeChatId) return;
+    if (!currentUserId || !activeChatId) return; if (guardBan()) return;
     const input = document.getElementById('msg-input'), btn = document.getElementById('msg-send-btn');
     const content = input.value.trim();
     if (!content) return;
@@ -1552,3 +1566,187 @@ document.addEventListener('input', e => {
     if (e.target && e.target.id === 'msg-input') { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }
 });
 document.addEventListener('change', e => { if (e.target && e.target.id === 'msg-search') startChatFromInput(); });
+
+// ==========================================
+// БАНЫ ПОЛЬЗОВАТЕЛЕЙ
+// ==========================================
+function isBannedNow(p) {
+    return !!(p && p.is_banned && (!p.banned_until || new Date(p.banned_until) > new Date()));
+}
+function isBannedSelf() { return isBannedNow(currentUserProfile); }
+function banUntilText(p) { return p.banned_until ? 'до ' + fmtDate(p.banned_until) : 'навсегда'; }
+function guardBan() {
+    if (!isBannedSelf()) return false;
+    showToast('Аккаунт заблокирован ' + banUntilText(currentUserProfile) + '. Действие недоступно', 'error');
+    return true;
+}
+function banBadge(p) { return isBannedNow(p) ? '<span class="ban-badge ml-2">БАН</span>' : ''; }
+function banBadgeById(id) { return banBadge(allProfilesData.find(p => p.id === id)); }
+
+function renderBanBanner() {
+    const el = document.getElementById('ban-banner');
+    if (!el) return;
+    if (!isBannedSelf()) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    const p = currentUserProfile;
+    el.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div><b>⛔ Ваш аккаунт заблокирован ${banUntilText(p)}.</b>${p.ban_reason ? ' Причина: ' + escapeHtml(p.ban_reason) + '.' : ''}<span class="text-red-200/70"> Оценки, комментарии, лайки и сообщения недоступны.</span></div><button onclick="openSupportModal()" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Написать в поддержку</button></div>`;
+    el.classList.remove('hidden');
+}
+
+function canBan(p) {
+    if (!isAdmin || !p || p.id === currentUserId || p.email === MASTER_ADMIN_EMAIL) return false;
+    if (p.is_admin && currentUserProfile?.email !== MASTER_ADMIN_EMAIL) return false;
+    return true;
+}
+function banControls(p, compact) {
+    if (!canBan(p)) return '';
+    const m = compact ? '' : 'ml-2 mt-3';
+    return isBannedNow(p)
+        ? `<button onclick="unbanUser('${p.id}')" class="${m} bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Разбанить</button>`
+        : `<button onclick="openBanModal('${p.id}')" class="${m} bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Забанить</button>`;
+}
+
+let banTargetId = null;
+window.openBanModal = function(userId) {
+    const p = allProfilesData.find(x => x.id === userId);
+    if (!p || !canBan(p)) return showToast('Этого пользователя забанить нельзя', 'error');
+    closeUserProfile();
+    banTargetId = userId;
+    document.getElementById('ban-target-name').innerText = p.username + (p.email ? ' · ' + p.email : '');
+    document.getElementById('ban-reason').value = '';
+    document.getElementById('ban-duration').value = '0';
+    document.getElementById('ban-modal').classList.remove('hidden');
+}
+window.closeBanModal = function() { document.getElementById('ban-modal').classList.add('hidden'); banTargetId = null; }
+window.confirmBan = async function() {
+    const p = allProfilesData.find(x => x.id === banTargetId);
+    if (!p || !canBan(p)) return;
+    const days = parseInt(document.getElementById('ban-duration').value, 10);
+    const reason = document.getElementById('ban-reason').value.trim().slice(0, 300) || null;
+    const until = days > 0 ? new Date(Date.now() + days * 864e5).toISOString() : null;
+    const { error } = await supabase.from('profiles').update({ is_banned: true, ban_reason: reason, banned_until: until }).eq('id', p.id);
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast(`${p.username} заблокирован`, 'success');
+    closeBanModal(); await loadData();
+}
+window.unbanUser = function(userId) {
+    const p = allProfilesData.find(x => x.id === userId);
+    if (!p || !canBan(p)) return;
+    closeUserProfile();
+    showConfirm(`Снять блокировку с «${p.username}»?`, async () => {
+        const { error } = await supabase.from('profiles').update({ is_banned: false }).eq('id', userId);
+        if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Блокировка снята', 'success'); await loadData(); }
+    }, 'admin');
+}
+
+// ==========================================
+// ТОП ТРЕКОВ
+// ==========================================
+let topMetric = 'rating', topPeriod = 'all', rankMetric = 'xp';
+const TOP_PERIODS = { all: ['За всё время', null], month: ['30 дней', 30], week: ['7 дней', 7] };
+const TOP_METRICS = { rating: 'По рейтингу', votes: 'По числу оценок', likes: 'По лайкам' };
+window.setTopMetric = m => { topMetric = m; renderTopTracks(); };
+window.setTopPeriod = p => { topPeriod = p; renderTopTracks(); };
+
+function segBtns(map, current, fn, disabled) {
+    return Object.entries(map).map(([k, v]) => `<button onclick="${fn}('${k}')" class="seg-btn ${k === current ? 'active' : ''} ${disabled ? 'disabled' : ''}">${Array.isArray(v) ? v[0] : v}</button>`).join('');
+}
+
+function computeTopTracks() {
+    const days = TOP_PERIODS[topPeriod][1], since = days ? Date.now() - days * 864e5 : 0;
+    const by = new Map();
+    allRatingsData.forEach(r => {
+        if (since && new Date(r.created_at || 0).getTime() < since) return;
+        const a = by.get(r.track_id) || { sum: 0, n: 0 }; a.sum += r.score || 0; a.n++; by.set(r.track_id, a);
+    });
+    const arr = [...by.values()], N = arr.reduce((x, a) => x + a.n, 0), C = N ? arr.reduce((x, a) => x + a.sum, 0) / N : 0, M = 3;
+    const rows = allTracksData.map(t => {
+        const a = by.get(t.id) || { sum: 0, n: 0 }, avg = a.n ? a.sum / a.n : 0;
+        return { t, avg, n: a.n, likes: t.likesCount, w: a.n ? (a.n / (a.n + M)) * avg + (M / (a.n + M)) * C : 0 };
+    });
+    const key = { rating: r => r.w, votes: r => r.n, likes: r => r.likes }[topMetric];
+    const valid = topMetric === 'likes' ? r => r.likes > 0 : r => r.n > 0;
+    return rows.filter(valid).sort((a, b) => key(b) - key(a) || b.avg - a.avg || b.n - a.n);
+}
+
+function topValueHtml(r) {
+    if (topMetric === 'likes') return `<div class="text-cyan-200 font-extrabold text-lg neon-text">♥ ${r.likes}</div><div class="text-[10px] text-gray-400">${r.n || r.t.votesCount} оц.</div>`;
+    if (topMetric === 'votes') return `<div class="text-cyan-200 font-extrabold text-lg neon-text">${r.n}</div><div class="text-[10px] text-gray-400">оценок · ср. ${r.avg.toFixed(1)}</div>`;
+    return `<div class="text-yellow-400 font-extrabold text-lg">${r.avg.toFixed(1)}<span class="text-[10px] text-gray-400 font-medium"> /30</span></div><div class="text-[10px] text-gray-400">${r.n} оц.</div>`;
+}
+
+function coverImg(t, cls) {
+    return t.cover_url ? `<img src="${escapeHtml(t.cover_url)}" class="${cls} object-cover bg-white/5" onerror="this.style.visibility='hidden'">` : `<div class="${cls} bg-gray-800 flex items-center justify-center text-gray-500">♪</div>`;
+}
+
+function renderTopTracks() {
+    const c = document.getElementById('top-view-container');
+    if (!c) return;
+    const list = computeTopTracks().slice(0, 30);
+    const head = `<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div><h2 class="text-2xl md:text-3xl font-extrabold tracking-tight neon-text">Топ треков</h2>
+        <p class="text-xs text-gray-400 mt-1">${topMetric === 'rating' ? 'Рейтинг учитывает число оценок: один «30/30» не обгонит трек с десятком высоких оценок.' : topMetric === 'likes' ? 'Лайки считаются за всё время.' : 'Самые обсуждаемые треки.'}</p></div>
+        <div class="flex flex-col items-end gap-2"><div class="flex gap-1.5 flex-wrap justify-end">${segBtns(TOP_METRICS, topMetric, 'setTopMetric')}</div>
+        <div class="flex gap-1.5">${segBtns(TOP_PERIODS, topPeriod, 'setTopPeriod', topMetric === 'likes')}</div></div></div>`;
+    if (!list.length) { c.innerHTML = head + `<div class="ice-card p-10 text-center text-gray-400">В этом периоде пока нет данных</div>`; return; }
+
+    const podium = list.slice(0, 3).map((r, i) => {
+        const order = ['md:order-2', 'md:order-1', 'md:order-3'][i], lift = i === 0 ? 'md:-mt-4' : 'md:mt-4';
+        return `<div class="${order} ${lift} podium-${i + 1} border rounded-2xl p-4 text-center relative overflow-hidden transition-transform hover:-translate-y-1">
+            <div class="absolute top-2 left-3 text-3xl font-black ${i === 0 ? 'text-cyan-100' : 'text-cyan-400/70'} neon-text">${i + 1}</div>
+            <div class="mx-auto w-28 h-28 md:w-32 md:h-32 mb-3 rounded-xl overflow-hidden border border-cyan-300/30 shadow-[0_0_20px_rgba(34,211,238,0.25)]">${coverImg(r.t, 'w-full h-full')}</div>
+            <div class="font-bold text-sm truncate">${escapeHtml(r.t.title)}</div><div class="text-xs text-gray-400 truncate mb-2">${escapeHtml(r.t.artist || 'TrueEstimation')}</div>
+            ${topValueHtml(r)}
+            <button onclick="playTrack(${Number(r.t.id)})" class="mt-3 w-full bg-cyan-500 text-black font-bold py-1.5 rounded-lg text-xs neon-btn">▶ Слушать</button></div>`;
+    }).join('');
+
+    const rows = list.slice(3).map((r, i) => `<div class="ice-card group flex items-center gap-3 p-2 pr-4">
+        <div class="w-8 text-center font-extrabold text-gray-400">${i + 4}</div>${coverImg(r.t, 'w-11 h-11 rounded-lg flex-shrink-0')}
+        <div class="flex-1 min-w-0"><div class="text-sm font-bold truncate">${escapeHtml(r.t.title)}</div><div class="text-xs text-gray-400 truncate">${escapeHtml(r.t.artist || 'TrueEstimation')}</div></div>
+        <div class="text-right w-24 shrink-0">${topValueHtml(r)}</div>
+        <button onclick="playTrack(${Number(r.t.id)})" class="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500 hover:text-black transition-colors flex items-center justify-center flex-shrink-0" title="Слушать">▶</button></div>`).join('');
+
+    c.innerHTML = head + `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 md:pt-4">${podium}</div><div class="space-y-2 pb-24">${rows}</div>`;
+}
+
+// ==========================================
+// РЕЙТИНГ ПОЛЬЗОВАТЕЛЕЙ
+// ==========================================
+const RANK_METRICS = { xp: 'По опыту', ratings: 'По оценкам', comments: 'По отзывам', likesReceived: 'По лайкам' };
+window.setRankMetric = m => { rankMetric = m; renderUserRanking(); };
+
+function renderUserRanking() {
+    const c = document.getElementById('ranking-view-container');
+    if (!c) return;
+    const all = allProfilesData.filter(p => !isBannedNow(p)).map(p => ({ p, s: getStats(p.id) })).filter(x => x.s.xp > 0)
+        .sort((a, b) => b.s[rankMetric] - a.s[rankMetric] || b.s.xp - a.s.xp);
+    const myIdx = all.findIndex(x => x.p.id === currentUserId);
+    const head = `<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div><h2 class="text-2xl md:text-3xl font-extrabold tracking-tight neon-text">Рейтинг пользователей</h2>
+        <p class="text-xs text-gray-400 mt-1">Опыт: оценка +10 · отзыв +15 · лайк на отзыве +5 · ответ +5 · лайк трека +2. Забаненные не участвуют.</p></div>
+        <div class="flex gap-1.5 flex-wrap justify-end">${segBtns(RANK_METRICS, rankMetric, 'setRankMetric')}</div></div>
+        ${myIdx >= 0 ? `<div class="ice-card p-3 mb-5 flex items-center justify-between"><span class="text-sm text-gray-300">Твоё место</span><span class="text-2xl font-extrabold text-cyan-200 neon-text">#${myIdx + 1} <span class="text-xs text-gray-400 font-medium">из ${all.length}</span></span></div>` : ''}`;
+    if (!all.length) { c.innerHTML = head + `<div class="ice-card p-10 text-center text-gray-400">Пока никто не набрал опыт. Оцени трек — и ты в списке!</div>`; return; }
+
+    const val = x => x.s[rankMetric];
+    const unit = { xp: 'XP', ratings: 'оценок', comments: 'отзывов', likesReceived: 'лайков' }[rankMetric];
+    const podium = all.slice(0, 3).map((x, i) => {
+        const order = ['md:order-2', 'md:order-1', 'md:order-3'][i], lift = i === 0 ? 'md:-mt-4' : 'md:mt-4';
+        return `<div onclick="openUserProfile('${x.p.id}')" class="${order} ${lift} podium-${i + 1} border rounded-2xl p-5 text-center cursor-pointer relative transition-transform hover:-translate-y-1 ${x.p.id === currentUserId ? 'ring-2 ring-cyan-300' : ''}">
+            <div class="absolute top-2 left-3 text-3xl font-black ${i === 0 ? 'text-cyan-100' : 'text-cyan-400/70'} neon-text">${i + 1}</div>
+            <div class="flex justify-center mb-3">${avatarMarkup(x.p, 'w-20 h-20 !border-2 !border-cyan-300/40', 'text-3xl')}</div>
+            <div class="font-bold truncate ${x.p.is_admin ? 'text-cyan-200' : ''}">${escapeHtml(x.p.username)}</div>
+            <div class="text-[11px] text-cyan-300 mb-2">Ур. ${x.s.level} · ${escapeHtml(x.s.levelName)}</div>
+            <div class="text-2xl font-extrabold text-cyan-100 neon-text">${val(x)}</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">${unit}</div></div>`;
+    }).join('');
+
+    const col = (k, v) => `<div class="w-14 md:w-16 text-center hidden sm:block ${rankMetric === k ? 'text-cyan-200 font-extrabold' : 'text-gray-400'}">${v}</div>`;
+    const rows = all.slice(3, 50).map((x, i) => `<div onclick="openUserProfile('${x.p.id}')" class="ice-card flex items-center gap-3 p-2.5 pr-4 cursor-pointer ${x.p.id === currentUserId ? '!border-cyan-300/70 shadow-[0_0_16px_rgba(34,211,238,0.25)]' : ''}">
+        <div class="w-8 text-center font-extrabold text-gray-400">${i + 4}</div>${avatarMarkup(x.p, 'w-10 h-10')}
+        <div class="flex-1 min-w-0"><div class="flex items-center gap-1 min-w-0"><span class="text-sm font-bold truncate ${x.p.is_admin ? 'text-cyan-200' : ''}">${escapeHtml(x.p.username)}</span>${x.p.is_admin ? '<span class="admin-badge ml-1">ADMIN</span>' : ''}</div>
+        <div class="text-[11px] text-cyan-300">Ур. ${x.s.level} · ${escapeHtml(x.s.levelName)}</div></div>
+        ${col('ratings', x.s.ratings + ' оц.')}${col('comments', x.s.comments + ' отз.')}${col('likesReceived', '♥ ' + x.s.likesReceived)}
+        <div class="w-16 text-right font-extrabold ${rankMetric === 'xp' ? 'text-cyan-200' : 'text-gray-300'}">${x.s.xp}<span class="text-[10px] text-gray-500 font-medium"> XP</span></div></div>`).join('');
+
+    c.innerHTML = head + `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 md:pt-4">${podium}</div><div class="space-y-2 pb-24">${rows}</div>`;
+}
+window.renderAdminPanel = renderAdminPanel;
