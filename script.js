@@ -14,37 +14,37 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const myTracks = [
     {
         id: 1, 
-        title: "Название трека 1", 
+        title: "Название трека: What you mean", 
         audio_url: "./1.mp3", 
         cover_url: "" 
     },
     {
         id: 2,
-        title: "Название трека 2",
+        title: "Название трека: CHANGE LIFE",
         audio_url: "./2.mp3",
         cover_url: ""
     },
     {
         id: 3,
-        title: "Название трека 3",
+        title: "Название трека: ПОТРАТИЛ ",
         audio_url: "./3.mp3",
         cover_url: ""
     },
     {
         id: 4,
-        title: "Название трека 4",
+        title: "Название трека: DEALERS",
         audio_url: "./4.mp3",
         cover_url: ""
     },
     {
         id: 5,
-        title: "Название трека 5",
+        title: "Название трека: KITCHEN",
         audio_url: "./5.mp3",
         cover_url: ""
     },
     {
         id: 6,
-        title: "Название трека 6",
+        title: "Название трека: NOT THIS",
         audio_url: "./6.mp3",
         cover_url: ""
     }
