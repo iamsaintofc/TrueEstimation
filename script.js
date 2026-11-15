@@ -1,7 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
 const supabaseUrl = 'https://szmwwykgtwdosauounds.supabase.co'; 
-const supabaseKey = 'sb_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; 
+const supabaseKey = 'b_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 const MASTER_ADMIN_EMAIL = 'zahavalgovno777@gmail.com';
 
