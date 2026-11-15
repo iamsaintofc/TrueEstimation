@@ -8,8 +8,37 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const globalAudio = new Audio();
 let currentTrackId = null;
 let allTracksData = []; 
-let currentCategory = 'Главное меню'; // Теперь по умолчанию открывается Главное меню
+let currentCategory = 'Главное меню';
 let ratingTrackId = null;
+
+// --- СИСТЕМА КРАСИВЫХ УВЕДОМЛЕНИЙ (TOASTS) ---
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    
+    // Цвета в зависимости от типа
+    const borderColor = type === 'success' ? 'border-green-500' : 'border-red-500';
+    const textColor = type === 'success' ? 'text-green-400' : 'text-red-400';
+    const icon = type === 'success' 
+        ? `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`
+        : `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
+
+    toast.className = `bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl border-l-4 ${borderColor} flex items-center gap-3 transition-all duration-300 translate-y-[-20px] opacity-0 pointer-events-auto`;
+    toast.innerHTML = `<div class="${textColor}">${icon}</div><span class="font-medium text-sm">${message}</span>`;
+    
+    container.appendChild(toast);
+
+    // Анимация появления
+    setTimeout(() => {
+        toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+    }, 10);
+
+    // Автоудаление через 3.5 секунды
+    setTimeout(() => {
+        toast.classList.add('translate-y-[-20px]', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
 
 function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";
@@ -37,18 +66,24 @@ supabase.auth.onAuthStateChange((event, session) => {
 window.login = async function() {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
-    if(!email || !password) return alert("Введи email и пароль!");
+    if(!email || !password) return showToast("Введи email и пароль!", "error");
     
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) alert('Ошибка: ' + signUpError.message);
-        else alert('Аккаунт создан! Вы вошли.');
-    } else if (error) alert('Ошибка: ' + error.message);
+        if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
+        else showToast('Аккаунт создан! Вы вошли.', 'success');
+    } else if (error) {
+        showToast('Ошибка: ' + error.message, 'error');
+    }
 }
-window.logout = async function() { await supabase.auth.signOut(); }
 
-// --- МОДАЛЬНОЕ ОКНО ОЦЕНКИ ---
+window.logout = async function() { 
+    await supabase.auth.signOut(); 
+    showToast('Вы вышли из аккаунта', 'success');
+}
+
+// --- МОДАЛЬНОЕ ОКНО ---
 window.openRatingModal = function(trackId) {
     const track = allTracksData.find(t => t.id === trackId);
     if (!track) return;
@@ -92,7 +127,7 @@ window.submitRating = async function() {
     if (!ratingTrackId) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-        alert('Чтобы ставить оценки, сначала войди или зарегистрируйся!');
+        showToast('Чтобы ставить оценки, сначала войди или зарегистрируйся!', 'error');
         closeRatingModal(); return;
     }
 
@@ -104,8 +139,13 @@ window.submitRating = async function() {
         .from('ratings')
         .upsert({ user_id: user.id, track_id: ratingTrackId, score: totalScore }, { onConflict: 'user_id, track_id' });
 
-    if (error) alert('Ошибка при сохранении: ' + error.message);
-    else { closeRatingModal(); await loadData(); }
+    if (error) {
+        showToast('Ошибка при сохранении: ' + error.message, 'error');
+    } else { 
+        showToast('Оценка успешно сохранена!', 'success');
+        closeRatingModal(); 
+        await loadData(); 
+    }
 }
 
 // --- ПЛЕЕР ---
@@ -216,13 +256,8 @@ async function loadData() {
 function renderCategories() {
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
-    
-    // Базовые категории, которые есть всегда
     const baseCategories = ['Главное меню', 'Все'];
-    
-    // Собираем уникальные категории из треков
     const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все')));
-    
     const allCategories = [...baseCategories, ...dynamicCategories];
 
     allCategories.forEach(cat => {
@@ -238,7 +273,6 @@ window.changeCategory = function(cat) {
     renderView();
 }
 
-// Управление отображением (Главное меню ИЛИ Список)
 function renderView() {
     const heroContainer = document.getElementById('hero-container');
     const listViewContainer = document.getElementById('list-view-container');
@@ -255,7 +289,6 @@ function renderView() {
     }
 }
 
-// ОГРОМНЫЙ ГЛАВНЫЙ ТРЕК
 function renderHero() {
     const heroContainer = document.getElementById('hero-container');
     if (allTracksData.length === 0 || allTracksData[0].avgScore === 0) {
@@ -269,7 +302,6 @@ function renderHero() {
 
     heroContainer.innerHTML = `
         <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-8 md:p-12 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group">
-            <!-- Атмосферный фон -->
             <div class="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl"></div>
             <div class="absolute bottom-0 left-0 -ml-32 -mb-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
             
@@ -277,7 +309,6 @@ function renderHero() {
                 <span>🏆</span> Трек №1 на сайте <span>🏆</span>
             </div>
             
-            <!-- Огромная обложка -->
             <img src="${topTrack.cover_url || 'https://via.placeholder.com/500?text=No+Cover'}" class="w-64 h-64 md:w-80 md:h-80 rounded-3xl object-cover shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-10 mb-8 border-4 border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
             
             <h2 class="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight z-10">${topTrack.title}</h2>
