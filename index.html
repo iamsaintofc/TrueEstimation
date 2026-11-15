@@ -16,53 +16,10 @@
                 radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
         }
         
-        /* --- ИДЕАЛЬНЫЕ ПОЛЗУНКИ --- */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-            margin: 8px 0;
-            display: block;
-        }
+        /* Скрываем стандартный вид ползунков, чтобы они не мешали */
+        input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; height: 100%; cursor: pointer; }
         input[type=range]:focus { outline: none; }
-        
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 2px;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #22c55e;
-            cursor: pointer;
-            -webkit-appearance: none;
-            /* Точная центровка */
-            margin-top: -6px; 
-            box-shadow: 0 0 8px rgba(34,197,94,0.6);
-            transition: transform 0.1s;
-        }
-        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
-
-        input[type=range]::-moz-range-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 2px;
-        }
-        input[type=range]::-moz-range-thumb {
-            height: 16px;
-            width: 16px;
-            border: none;
-            border-radius: 50%;
-            background: #22c55e;
-            cursor: pointer;
-            box-shadow: 0 0 8px rgba(34,197,94,0.6);
-        }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 0; width: 0; } /* Убираем стандартный кружок, будем рисовать свой */
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -136,10 +93,8 @@
                 </div>
             </div>
 
-            <!-- Hero (Главное меню) - Уменьшен и вписан в экран -->
             <div id="hero-container" class="hidden flex-1 items-center justify-center overflow-y-auto pb-20"></div>
 
-            <!-- Список треков -->
             <div id="list-view-container" class="flex-1">
                 <h2 id="current-category-title" class="text-3xl font-extrabold mb-6 tracking-tight">Все треки</h2>
                 
@@ -158,11 +113,11 @@
         </main>
     </div>
 
-    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР -->
-    <div id="global-player" class="fixed bottom-0 left-0 right-0 h-24 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 px-6 z-40 hidden flex items-center justify-between">
+    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР (ИСПРАВЛЕННЫЕ ХИТБОКСЫ) -->
+    <div id="global-player" class="fixed bottom-0 left-0 right-0 h-24 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 px-4 md:px-6 z-40 hidden flex items-center justify-between">
         
         <!-- Левая часть (Клик по всей левой части = Предыдущий трек) -->
-        <div onclick="playPrev()" class="flex items-center gap-4 w-1/4 min-w-[200px] cursor-pointer group">
+        <div onclick="playPrev()" class="flex items-center gap-4 w-1/4 min-w-[200px] cursor-pointer group hover:bg-white/5 p-2 rounded-xl transition-colors">
             <img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg group-hover:opacity-80 transition-opacity" onerror="this.style.display='none'">
             <div class="truncate">
                 <div id="player-title" class="font-bold text-sm truncate text-white group-hover:text-green-400 transition-colors">Название</div>
@@ -171,53 +126,61 @@
         </div>
 
         <!-- Центральная часть -->
-        <div class="flex-1 max-w-2xl flex flex-col items-center gap-2">
-            <div class="flex items-center gap-8">
-                <!-- Огромная зона клика для Назад -->
-                <div onclick="playPrev()" class="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-400 hover:text-white transition-colors">
+        <div class="flex-1 max-w-xl flex flex-col items-center gap-1">
+            <div class="flex items-center gap-6 md:gap-8">
+                <!-- ОГРОМНАЯ зона клика для Назад -->
+                <button onclick="playPrev()" class="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-                </div>
+                </button>
                 
                 <!-- Кнопка Play -->
                 <button id="global-play-btn" onclick="toggleGlobalPlay()" class="w-12 h-12 flex items-center justify-center bg-white text-black hover:scale-105 rounded-full transition-transform active:scale-95 shadow-lg">
                     <svg id="global-play-icon" class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 </button>
                 
-                <!-- Огромная зона клика для Вперед -->
-                <div onclick="playNext()" class="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-400 hover:text-white transition-colors">
+                <!-- ОГРОМНАЯ зона клика для Вперед -->
+                <button onclick="playNext()" class="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M16 18h2V6h-2zM6 18l8.5-6L6 6z"/></svg>
-                </div>
+                </button>
             </div>
             
             <div class="flex items-center gap-3 w-full">
                 <span id="global-current-time" class="text-[11px] text-gray-400 w-9 text-right font-medium">0:00</span>
-                <!-- Расширенная зона клика для прогресса -->
-                <div class="flex-1 h-4 flex items-center relative cursor-pointer group">
-                    <div class="w-full h-1 bg-white/20 rounded-full relative">
+                
+                <!-- КОНТЕЙНЕР ПРОГРЕССА (Клик в любом месте) -->
+                <div id="progress-container" class="flex-1 h-6 flex items-center relative cursor-pointer group">
+                    <!-- Визуальная полоса -->
+                    <div class="w-full h-1.5 bg-white/20 rounded-full relative pointer-events-none">
                         <div id="global-progress-bar" class="absolute h-full bg-green-500 rounded-full w-0"></div>
-                        <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <!-- Визуальный кружок (чтобы было видно, куда нажимать) -->
+                        <div id="progress-thumb" class="absolute w-3 h-3 bg-green-500 rounded-full top-1/2 -translate-y-1/2 -ml-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     </div>
+                    <!-- Невидимый нативный инпут для перетаскивания -->
+                    <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="absolute inset-0 opacity-0 z-10">
                 </div>
+                
                 <span id="global-duration" class="text-[11px] text-gray-400 w-9 font-medium">0:00</span>
             </div>
         </div>
 
         <!-- Правая часть (Громкость) -->
-        <div class="w-1/4 flex justify-end items-center gap-3 min-w-[150px]">
-            <button onclick="toggleMute()" id="volume-icon-btn" class="text-gray-400 hover:text-white transition-colors p-2">
+        <div class="w-1/4 flex justify-end items-center gap-2 min-w-[150px]">
+            <button onclick="toggleMute()" id="volume-icon-btn" class="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5">
                 <svg id="volume-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
             </button>
-            <!-- Расширенная зона клика для громкости -->
-            <div class="w-24 h-6 flex items-center relative cursor-pointer group">
-                <div class="w-full h-1 bg-white/20 rounded-full relative">
+            
+            <!-- КОНТЕЙНЕР ГРОМКОСТИ (Клик в любом месте) -->
+            <div id="volume-container" class="w-24 h-6 flex items-center relative cursor-pointer group">
+                <div class="w-full h-1.5 bg-white/20 rounded-full relative pointer-events-none">
                     <div id="volume-progress-bar" class="absolute h-full bg-green-500 rounded-full w-[100%]"></div>
-                    <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <div id="volume-thumb" class="absolute w-3 h-3 bg-green-500 rounded-full top-1/2 -translate-y-1/2 -ml-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity right-0"></div>
                 </div>
+                <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="absolute inset-0 opacity-0 z-10">
             </div>
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ВХОДА (Прозрачное) -->
+    <!-- МОДАЛЬНОЕ ОКНО ВХОДА -->
     <div id="login-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">
@@ -232,9 +195,8 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ (Прозрачное - Glassmorphism) -->
+    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ -->
     <div id="rating-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <!-- Задний фон сделан полупрозрачным с сильным блюром -->
         <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -254,35 +216,35 @@
                         <span class="text-gray-300 font-semibold">Текст и смысл</span>
                         <span id="val-crit-1" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()">
+                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Бит и ритмика</span>
                         <span id="val-crit-2" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()">
+                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Сведение и мастеринг</span>
                         <span id="val-crit-3" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()">
+                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Вайб и атмосфера</span>
                         <span id="val-crit-4" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()">
+                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Оригинальность</span>
                         <span id="val-crit-5" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()">
+                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
                 </div>
             </div>
 
