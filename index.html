@@ -16,10 +16,34 @@
                 radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
         }
         
-        /* Скрываем стандартный вид ползунков, чтобы они не мешали */
-        input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; height: 100%; cursor: pointer; }
-        input[type=range]:focus { outline: none; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 0; width: 0; } /* Убираем стандартный кружок, будем рисовать свой */
+        /* Скрываем стандартный вид ползунков ТОЛЬКО для плеера */
+        .player-slider { -webkit-appearance: none; background: transparent; width: 100%; height: 100%; cursor: pointer; }
+        .player-slider:focus { outline: none; }
+        .player-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 0; width: 0; } 
+
+        /* Красивые ползунки для окна оценок */
+        .rating-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            outline: none;
+            margin-top: 8px;
+        }
+        .rating-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #22c55e;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(34,197,94,0.5);
+            transition: transform 0.1s;
+        }
+        .rating-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -113,34 +137,47 @@
         </main>
     </div>
 
-    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР (ИСПРАВЛЕННЫЕ ХИТБОКСЫ) -->
+    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР -->
     <div id="global-player" class="fixed bottom-0 left-0 right-0 h-24 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 px-4 md:px-6 z-40 hidden flex items-center justify-between">
         
-        <!-- Левая часть (Клик по всей левой части = Предыдущий трек) -->
-        <div onclick="playPrev()" class="flex items-center gap-4 w-1/4 min-w-[200px] cursor-pointer group hover:bg-white/5 p-2 rounded-xl transition-colors">
-            <img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg group-hover:opacity-80 transition-opacity" onerror="this.style.display='none'">
+        <!-- Левая часть (Клик по обложке = Лайтбокс) -->
+        <div class="flex items-center gap-4 w-1/4 min-w-[200px] p-2 rounded-xl">
+            <div onclick="openCoverModal()" class="cursor-pointer hover:opacity-80 transition-opacity shrink-0">
+                <img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg" onerror="this.style.display='none'">
+            </div>
             <div class="truncate">
-                <div id="player-title" class="font-bold text-sm truncate text-white group-hover:text-green-400 transition-colors">Название</div>
+                <div id="player-title" class="font-bold text-sm truncate text-white">Название</div>
                 <div id="player-artist" class="text-xs text-gray-400 truncate">Исполнитель</div>
             </div>
         </div>
 
         <!-- Центральная часть -->
-        <div class="flex-1 max-w-xl flex flex-col items-center gap-1">
-            <div class="flex items-center gap-6 md:gap-8">
-                <!-- ОГРОМНАЯ зона клика для Назад -->
-                <button onclick="playPrev()" class="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+        <div class="flex-1 max-w-xl flex flex-col items-center gap-1.5">
+            <div class="flex items-center gap-4 md:gap-6">
+                <!-- Shuffle -->
+                <button id="shuffle-btn" onclick="toggleShuffle()" class="text-gray-400 hover:text-white transition-colors" title="Перемешать">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                </button>
+                
+                <!-- Prev -->
+                <button onclick="playPrev()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                 </button>
                 
-                <!-- Кнопка Play -->
+                <!-- Play/Pause -->
                 <button id="global-play-btn" onclick="toggleGlobalPlay()" class="w-12 h-12 flex items-center justify-center bg-white text-black hover:scale-105 rounded-full transition-transform active:scale-95 shadow-lg">
                     <svg id="global-play-icon" class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 </button>
                 
-                <!-- ОГРОМНАЯ зона клика для Вперед -->
-                <button onclick="playNext()" class="w-12 h-12 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                <!-- Next -->
+                <button onclick="playNext()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M16 18h2V6h-2zM6 18l8.5-6L6 6z"/></svg>
+                </button>
+                
+                <!-- Repeat -->
+                <button id="repeat-btn" onclick="toggleRepeat()" class="text-gray-400 hover:text-white transition-colors relative" title="Повтор">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                    <span id="repeat-badge" class="absolute -top-1.5 -right-1.5 text-[9px] bg-green-500 text-black rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold hidden">1</span>
                 </button>
             </div>
             
@@ -149,14 +186,11 @@
                 
                 <!-- КОНТЕЙНЕР ПРОГРЕССА (Клик в любом месте) -->
                 <div id="progress-container" class="flex-1 h-6 flex items-center relative cursor-pointer group">
-                    <!-- Визуальная полоса -->
                     <div class="w-full h-1.5 bg-white/20 rounded-full relative pointer-events-none">
                         <div id="global-progress-bar" class="absolute h-full bg-green-500 rounded-full w-0"></div>
-                        <!-- Визуальный кружок (чтобы было видно, куда нажимать) -->
                         <div id="progress-thumb" class="absolute w-3 h-3 bg-green-500 rounded-full top-1/2 -translate-y-1/2 -ml-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     </div>
-                    <!-- Невидимый нативный инпут для перетаскивания -->
-                    <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="absolute inset-0 opacity-0 z-10">
+                    <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="player-slider absolute inset-0 opacity-0 z-10">
                 </div>
                 
                 <span id="global-duration" class="text-[11px] text-gray-400 w-9 font-medium">0:00</span>
@@ -175,7 +209,7 @@
                     <div id="volume-progress-bar" class="absolute h-full bg-green-500 rounded-full w-[100%]"></div>
                     <div id="volume-thumb" class="absolute w-3 h-3 bg-green-500 rounded-full top-1/2 -translate-y-1/2 -ml-1.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity right-0"></div>
                 </div>
-                <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="absolute inset-0 opacity-0 z-10">
+                <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="player-slider absolute inset-0 opacity-0 z-10">
             </div>
         </div>
     </div>
@@ -195,9 +229,9 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ -->
-    <div id="rating-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
+    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ (Увеличено и прозрачнее) -->
+    <div id="rating-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-black/40 backdrop-blur-3xl border border-white/20 rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
@@ -210,41 +244,41 @@
                 </div>
             </div>
             
-            <div class="space-y-4 mb-8 z-10 relative">
+            <div class="space-y-6 mb-8 z-10 relative">
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Текст и смысл</span>
                         <span id="val-crit-1" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
+                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Бит и ритмика</span>
                         <span id="val-crit-2" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
+                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Сведение и мастеринг</span>
                         <span id="val-crit-3" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
+                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Вайб и атмосфера</span>
                         <span id="val-crit-4" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
+                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider">
                 </div>
                 <div>
                     <div class="flex justify-between text-sm mb-1">
                         <span class="text-gray-300 font-semibold">Оригинальность</span>
                         <span id="val-crit-5" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full accent-green-500">
+                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider">
                 </div>
             </div>
 
@@ -259,6 +293,11 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО ОБЛОЖКИ (ЛАЙТБОКС) -->
+    <div id="cover-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4 transition-all duration-300" onclick="closeCoverModal()">
+        <img id="cover-modal-img" src="" class="max-w-full max-h-[90vh] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] object-contain border border-white/10" onclick="event.stopPropagation()">
     </div>
 
     <div id="toast-container" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
