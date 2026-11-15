@@ -11,12 +11,16 @@ let allTracksData = [];
 let allCommentsData = []; 
 let currentCategory = 'Главное меню';
 let ratingTrackId = null;
-let currentUserRating = null; // Храним оценку текущего юзера для открытого трека
+let currentUserRating = null;
 let previousVolume = 1;
+let currentUserId = null;
 
 let isShuffle = false;
 let repeatMode = 0; 
 let currentSort = 'rating';
+
+// Переменные для кастомного подтверждения
+let confirmCallback = null;
 
 // --- ХЕЛПЕРЫ ---
 function escapeHtml(str) {
@@ -48,14 +52,33 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+// --- КАСТОМНЫЙ CONFIRM ---
+window.showConfirm = function(text, callback) {
+    document.getElementById('confirm-text').innerText = text;
+    confirmCallback = callback;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+window.closeConfirmModal = function() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+    confirmCallback = null;
+}
+
+window.executeConfirm = async function() {
+    if (confirmCallback) await confirmCallback();
+    closeConfirmModal();
+}
+
 // --- АВТОРИЗАЦИЯ ---
 supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
+        currentUserId = session.user.id;
         document.getElementById('login-btn').classList.add('hidden');
         document.getElementById('user-profile').classList.remove('hidden');
         document.getElementById('user-email-display').innerText = session.user.email;
         document.getElementById('user-avatar-letter').innerText = session.user.email.charAt(0).toUpperCase();
     } else {
+        currentUserId = null;
         document.getElementById('login-btn').classList.remove('hidden');
         document.getElementById('user-profile').classList.add('hidden');
     }
@@ -275,26 +298,15 @@ window.openRatingModal = function(trackId) {
     if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } 
     else { coverImg.style.display = 'none'; }
 
-    // ПРОВЕРКА: Есть ли уже оценка от этого юзера?
     currentUserRating = track.userRating; 
     const deleteBtn = document.getElementById('delete-rating-btn');
 
     if (currentUserRating) {
-        // Загружаем старые значения
-        for(let i=1; i<=5; i++) {
-            document.getElementById(`crit-${i}`).value = 3; // Заглушка, так как мы храним только общий score
-        }
-        // ВАЖНО: В текущей БД мы храним только ИТОГОВЫЙ score. 
-        // Если мы не храним разбивку по критериям, ставим среднее или оставляем 3.
-        // Оставим 3, так как разбивка не сохраняется.
+        for(let i=1; i<=5; i++) document.getElementById(`crit-${i}`).value = 3;
         document.getElementById('rating-comment').value = currentUserRating.comment || '';
         deleteBtn.classList.remove('hidden');
     } else {
-        // Сбрасываем на дефолт
-        for(let i=1; i<=5; i++) {
-            document.getElementById(`crit-${i}`).value = 3;
-            document.getElementById(`val-crit-${i}`).innerText = '3 / 6';
-        }
+        for(let i=1; i<=5; i++) { document.getElementById(`crit-${i}`).value = 3; document.getElementById(`val-crit-${i}`).innerText = '3 / 6'; }
         document.getElementById('rating-comment').value = '';
         deleteBtn.classList.add('hidden');
     }
@@ -344,28 +356,28 @@ window.submitRating = async function() {
     }
 }
 
-window.deleteRatingFromModal = async function() {
+window.promptDeleteRating = function() {
     if (!ratingTrackId || !currentUserRating) return;
-    if (!confirm('Ты уверен, что хочешь удалить свою оценку и комментарий?')) return;
-
-    const { error } = await supabase.from('ratings').delete().match({ id: currentUserRating.id });
-    
-    if (error) showToast('Ошибка при удалении: ' + error.message, 'error');
-    else {
-        showToast('Оценка удалена', 'success');
-        closeRatingModal();
-        await loadData();
-    }
+    showConfirm('Ты уверен, что хочешь удалить свою оценку и комментарий?', async () => {
+        const { error } = await supabase.from('ratings').delete().match({ id: currentUserRating.id });
+        if (error) showToast('Ошибка при удалении: ' + error.message, 'error');
+        else {
+            showToast('Оценка удалена', 'success');
+            closeRatingModal();
+            await loadData();
+        }
+    });
 }
 
-window.deleteCommentFromView = async function(ratingId) {
-    if (!confirm('Удалить свой комментарий и оценку?')) return;
-    const { error } = await supabase.from('ratings').delete().match({ id: ratingId });
-    if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast('Удалено', 'success'); await loadData(); }
+window.promptDeleteComment = function(ratingId) {
+    showConfirm('Удалить свой комментарий и оценку?', async () => {
+        const { error } = await supabase.from('ratings').delete().match({ id: ratingId });
+        if (error) showToast('Ошибка: ' + error.message, 'error');
+        else { showToast('Удалено', 'success'); await loadData(); }
+    });
 }
 
-// --- ЛАЙКИ ---
+// --- ЛАЙКИ (ОПТИМИСТИЧНЫЕ) ---
 window.likeTrack = async function(trackId, event) {
     event.stopPropagation();
     const { data: { session } } = await supabase.auth.getSession();
@@ -373,15 +385,30 @@ window.likeTrack = async function(trackId, event) {
 
     const user = session.user;
     const track = allTracksData.find(t => t.id === trackId);
+    if (!track) return;
 
-    if (track.userLiked) {
+    // 1. Мгновенно обновляем UI
+    const wasLiked = track.userLiked;
+    track.userLiked = !wasLiked;
+    track.likesCount += wasLiked ? -1 : 1;
+    
+    // Перерисовываем список треков локально (мгновенно)
+    renderTracksList(); 
+
+    // 2. Отправляем запрос в фон
+    if (wasLiked) {
         const { error } = await supabase.from('track_likes').delete().match({ user_id: user.id, track_id: trackId });
-        if (error) console.error(error);
+        if (error) { // Откат при ошибке
+            track.userLiked = true; track.likesCount++; renderTracksList();
+            showToast('Ошибка при удалении лайка', 'error');
+        }
     } else {
         const { error } = await supabase.from('track_likes').insert({ user_id: user.id, track_id: trackId });
-        if (error) console.error(error);
+        if (error) { // Откат при ошибке
+            track.userLiked = false; track.likesCount--; renderTracksList();
+            showToast('Ошибка при лайке', 'error');
+        }
     }
-    await loadData();
 }
 
 window.likeComment = async function(ratingId, event) {
@@ -391,15 +418,27 @@ window.likeComment = async function(ratingId, event) {
 
     const user = session.user;
     const comment = allCommentsData.find(c => c.id === ratingId);
+    if (!comment) return;
 
-    if (comment.userLiked) {
+    // 1. Мгновенно обновляем UI
+    const wasLiked = comment.userLiked;
+    comment.userLiked = !wasLiked;
+    comment.likesCount += wasLiked ? -1 : 1;
+    
+    renderCommentsView(); // Перерисовываем комменты
+
+    // 2. Фоновый запрос
+    if (wasLiked) {
         const { error } = await supabase.from('comment_likes').delete().match({ user_id: user.id, rating_id: ratingId });
-        if (error) console.error(error);
+        if (error) {
+            comment.userLiked = true; comment.likesCount++; renderCommentsView();
+        }
     } else {
         const { error } = await supabase.from('comment_likes').insert({ user_id: user.id, rating_id: ratingId });
-        if (error) console.error(error);
+        if (error) {
+            comment.userLiked = false; comment.likesCount--; renderCommentsView();
+        }
     }
-    await loadData();
 }
 
 // --- СОРТИРОВКА ---
@@ -411,7 +450,7 @@ window.changeSort = function(sortType) {
 // --- ЗАГРУЗКА ДАННЫХ ---
 async function loadData() {
     const { data: { session } } = await supabase.auth.getSession();
-    const currentUserId = session ? session.user.id : null;
+    currentUserId = session ? session.user.id : null;
 
     const [tracksRes, ratingsRes, trackLikesRes, commentLikesRes] = await Promise.all([
         supabase.from('tracks').select('*'),
@@ -462,18 +501,13 @@ async function loadData() {
 
         let category = track.category;
         if (!category || category.trim() === "") category = 'Без категории';
-
-        // Находим оценку текущего пользователя для этого трека
         const userRatingObj = currentUserId ? tRatings.find(r => r.user_id === currentUserId) : null;
 
         allTracksData.push({ 
-            ...track, 
-            category, 
-            avgScore, 
-            votesCount,
+            ...track, category, avgScore, votesCount,
             likesCount: tLikes.length,
             userLiked: currentUserId ? tLikes.includes(currentUserId) : false,
-            userRating: userRatingObj // Сохраняем сюда
+            userRating: userRatingObj
         });
     }
 
@@ -605,9 +639,10 @@ function renderTracksList() {
         const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
         const trackIdArg = Number(track.id);
         
+        // Обновленная иконка лайка (чуть больше и без фона)
         const heartIcon = track.userLiked 
-            ? `<svg class="w-5 h-5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-            : `<svg class="w-5 h-5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+            ? `<svg class="w-6 h-6 text-red-500 fill-current transition-transform scale-110" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+            : `<svg class="w-6 h-6 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
 
         return `
             <div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default">
@@ -635,9 +670,10 @@ function renderTracksList() {
                 </div>
                 
                 <div class="w-24 text-center shrink-0 flex justify-center">
-                    <button onclick="likeTrack(${trackIdArg}, event)" class="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors">
+                    <!-- Убрали кривой фон, сделали кнопку аккуратным кружком -->
+                    <button onclick="likeTrack(${trackIdArg}, event)" class="flex items-center gap-1.5 p-2 rounded-full hover:bg-white/5 transition-all active:scale-90" title="Поставить лайк">
                         ${heartIcon}
-                        <span class="text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'}">${track.likesCount > 0 ? track.likesCount : ''}</span>
+                        <span class="text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-4 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span>
                     </button>
                 </div>
 
@@ -666,14 +702,17 @@ function renderCommentsView() {
 
     const htmlParts = sortedComments.map(comment => {
         const dateStr = new Date(comment.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+        
+        // Увеличенные иконки для комментов
         const heartIcon = comment.userLiked
-            ? `<svg class="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-            : `<svg class="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+            ? `<svg class="w-5 h-5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+            : `<svg class="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
 
-        // Кнопка удаления для своих комментов
+        // Увеличенная кнопка удаления
         const deleteBtn = comment.isOwn 
-            ? `<button onclick="deleteCommentFromView(${comment.id})" class="text-gray-500 hover:text-red-400 transition-colors ml-2" title="Удалить">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                <span class="text-xs font-bold">Удалить</span>
                </button>` 
             : '';
 
@@ -686,19 +725,20 @@ function renderCommentsView() {
                             <h4 class="text-sm font-bold text-white truncate cursor-pointer hover:underline" onclick="playTrack(${comment.track_id})">${escapeHtml(comment.trackTitle)}</h4>
                             <p class="text-xs text-gray-400 truncate">${escapeHtml(comment.trackArtist || 'TrueEstimation')}</p>
                         </div>
-                        <div class="flex items-center">
-                            <span class="text-[10px] text-gray-500 whitespace-nowrap ml-2">${dateStr}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-500 whitespace-nowrap">${dateStr}</span>
                             ${deleteBtn}
                         </div>
                     </div>
-                    <p class="text-sm text-gray-200 leading-relaxed mb-3">"${escapeHtml(comment.comment)}"</p>
+                    <p class="text-sm text-gray-200 leading-relaxed mb-4">"${escapeHtml(comment.comment)}"</p>
                     
-                    <div class="flex items-center gap-4">
-                        <div class="flex items-center gap-1.5 cursor-pointer group" onclick="likeComment(${comment.id}, event)">
+                    <div class="flex items-center gap-3">
+                        <!-- Увеличенная кнопка лайка -->
+                        <button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">
                             ${heartIcon}
-                            <span class="text-xs font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : ''}</span>
-                        </div>
-                        <div class="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div>
+                            <span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span>
+                        </button>
+                        <div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div>
                     </div>
                 </div>
             </div>
