@@ -23,6 +23,7 @@ let userPlaylists = []; let currentTrackToAddToPlaylist = null; let allPlaylistT
 let selectedEmojiAvatar = null;
 let selectedAvatarBg = '#1e293b';
 let allReportsData = []; // ДЛЯ ЖАЛОБ
+let allRatingsData = []; let allCommentLikesData = []; let userLinkHandled = false;
 
 // --- ПЕРЕХВАТ ОШИБОК ---
 window.onerror = function(message, source, lineno, colno, error) {
@@ -108,54 +109,304 @@ window.shareTrack = function(trackId, event) { event.stopPropagation(); const ur
 window.shareCurrentPlaylist = function() { if (!currentCategory.startsWith('Playlist_')) return; const plId = currentCategory.split('_')[1]; const url = `${window.location.origin}${window.location.pathname}?playlist=${plId}`; navigator.clipboard.writeText(url).then(() => showToast(currentLang === 'ru' ? 'Ссылка на плейлист скопирована!' : 'Playlist link copied!', 'success')); }
 
 // --- ПОДДЕРЖКА ---
-window.openSupportModal = function() { if (!currentUserId) return showToast('Войдите, чтобы написать в поддержку', 'error'); document.getElementById('support-modal').classList.remove('hidden'); }
+let reportFilter = 'all';
+let replyingReportId = null;
+
+function findProfileByName(name) {
+    const n = (name || '').trim().replace(/^@/, '').toLowerCase();
+    if (!n) return null;
+    return allProfilesData.find(p => (p.username || '').toLowerCase() === n) || null;
+}
+
+function avatarMarkup(p, size = 'w-8 h-8', textSize = 'text-sm') {
+    p = p || {};
+    const isUrl = p.avatar_url && String(p.avatar_url).startsWith('http');
+    const letter = (p.username || 'U').charAt(0).toUpperCase();
+    const bg = isUrl ? '' : `background-color:${p.avatar_bg || '#1e293b'}`;
+    const light = ['#ffffff', '#f59e0b', '#10b981', '#06b6d4'].includes(p.avatar_bg);
+    const inner = isUrl
+        ? `<img src="${escapeHtml(p.avatar_url)}" class="w-full h-full object-cover">`
+        : `<span class="${textSize} font-bold" style="color:${light ? 'black' : 'white'}">${p.avatar_url ? escapeHtml(p.avatar_url) : escapeHtml(letter)}</span>`;
+    return `<div class="${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10" style="${bg}">${inner}</div>`;
+}
+
+function fmtDate(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+window.openSupportModal = function(opts) {
+    if (!currentUserId) return showToast('Войдите, чтобы написать в поддержку', 'error');
+    opts = (opts && typeof opts === 'object' && !opts.target) ? opts : (opts || {});
+    const list = document.getElementById('support-users-list');
+    if (list) list.innerHTML = allProfilesData.filter(p => p.id !== currentUserId && p.username).map(p => `<option value="${escapeHtml(p.username)}"></option>`).join('');
+    document.getElementById('support-type').value = opts.type || 'bug';
+    toggleTargetUserInput();
+    if (opts.target) document.getElementById('support-target-user').value = opts.target;
+    switchSupportTab('new');
+    renderMyTickets();
+    document.getElementById('support-modal').classList.remove('hidden');
+}
 window.closeSupportModal = function() { document.getElementById('support-modal').classList.add('hidden'); }
+
+window.switchSupportTab = function(tab) {
+    const isNew = tab === 'new';
+    document.getElementById('support-panel-new').classList.toggle('hidden', !isNew);
+    document.getElementById('support-panel-my').classList.toggle('hidden', isNew);
+    const on = 'flex-1 px-3 py-2 rounded-lg text-sm font-bold bg-cyan-500 text-black transition-colors';
+    const off = 'flex-1 px-3 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white transition-colors';
+    document.getElementById('support-tab-new').className = isNew ? on : off;
+    document.getElementById('support-tab-my').className = isNew ? off : on;
+}
 
 window.toggleTargetUserInput = function() {
     const type = document.getElementById('support-type').value;
+    const wrap = document.getElementById('support-target-wrap');
     const input = document.getElementById('support-target-user');
     if (type === 'report') {
-        input.classList.remove('hidden');
+        wrap.classList.remove('hidden');
     } else {
-        input.classList.add('hidden');
+        wrap.classList.add('hidden');
         input.value = '';
+        document.getElementById('support-target-hint').innerText = '';
     }
+}
+
+window.checkSupportTarget = function() {
+    const hint = document.getElementById('support-target-hint');
+    const v = document.getElementById('support-target-user').value.trim();
+    if (!v) { hint.innerText = ''; return; }
+    const p = findProfileByName(v);
+    if (!p) { hint.className = 'text-[11px] mt-1 text-red-400'; hint.innerText = 'Пользователь с таким ником не найден'; }
+    else if (p.id === currentUserId) { hint.className = 'text-[11px] mt-1 text-red-400'; hint.innerText = 'Нельзя пожаловаться на себя'; }
+    else { hint.className = 'text-[11px] mt-1 text-emerald-400'; hint.innerText = '✓ Пользователь найден'; }
+}
+
+function renderMyTickets() {
+    const list = document.getElementById('support-my-list');
+    if (!list) return;
+    const mine = allReportsData.filter(r => r.user_id === currentUserId);
+    const open = mine.filter(r => r.status !== 'resolved').length;
+    const cnt = document.getElementById('support-my-count');
+    if (cnt) cnt.innerText = mine.length ? `(${mine.length})` : '';
+    if (!mine.length) { list.innerHTML = `<p class="text-sm text-gray-500 text-center py-8">Ты пока ничего не отправлял</p>`; return; }
+    const typeText = t => t === 'bug' ? 'Баг' : t === 'report' ? 'Жалоба' : 'Другое';
+    list.innerHTML = mine.map(r => {
+        const done = r.status === 'resolved';
+        const badge = done
+            ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Решено</span>`
+            : `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400">На рассмотрении</span>`;
+        const reply = r.admin_reply ? `<div class="mt-2 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20"><div class="text-[10px] font-bold text-cyan-400 mb-1">Ответ поддержки</div><div class="text-sm text-gray-200 whitespace-pre-wrap">${escapeHtml(r.admin_reply)}</div></div>` : '';
+        return `<div class="bg-black/30 border border-white/10 rounded-xl p-3">
+            <div class="flex items-center justify-between mb-1"><span class="text-xs text-cyan-400 font-bold">${typeText(r.type)}${r.target_username ? ' · ' + escapeHtml(r.target_username) : ''}</span>${badge}</div>
+            <div class="text-sm text-gray-300 whitespace-pre-wrap">${escapeHtml(r.message)}</div>
+            <div class="text-[10px] text-gray-500 mt-1">${fmtDate(r.created_at)}</div>${reply}</div>`;
+    }).join('');
+}
+
+async function refreshReports() {
+    if (!currentUserId) return;
+    try {
+        let q = supabase.from('reports').select('*').order('created_at', { ascending: false });
+        if (!isAdmin) q = q.eq('user_id', currentUserId);
+        const { data, error } = await q;
+        if (!error) allReportsData = data || [];
+    } catch (e) { console.error(e); }
+    renderMyTickets();
+    if (currentCategory === 'AdminPanel') renderAdminPanel();
 }
 
 window.submitSupport = async function() {
+    if (!currentUserId) return showToast('Войдите, чтобы написать в поддержку', 'error');
     const type = document.getElementById('support-type').value;
-    const targetUser = document.getElementById('support-target-user').value.trim();
+    const targetRaw = document.getElementById('support-target-user').value.trim();
     const message = document.getElementById('support-message').value.trim();
-    
-    if (!message) return showToast('Напишите сообщение', 'error');
-    if (type === 'report' && !targetUser) return showToast('Укажите никнейм нарушителя', 'error');
 
+    if (!message) return showToast('Напишите сообщение', 'error');
+    if (message.length > 1000) return showToast('Сообщение слишком длинное (макс. 1000 символов)', 'error');
+
+    let target = null;
+    if (type === 'report') {
+        if (!targetRaw) return showToast('Укажите никнейм нарушителя', 'error');
+        target = findProfileByName(targetRaw);
+        if (!target) return showToast(`Пользователь «${targetRaw}» не найден. Проверь ник`, 'error');
+        if (target.id === currentUserId) return showToast('Нельзя пожаловаться на себя', 'error');
+    }
+
+    const openCount = allReportsData.filter(r => r.user_id === currentUserId && r.status !== 'resolved').length;
+    if (!isAdmin && openCount >= 5) return showToast('У тебя уже 5 открытых обращений. Дождись ответа', 'error');
+
+    const btn = document.getElementById('support-submit-btn');
+    btn.disabled = true; btn.classList.add('opacity-50');
     try {
-        const { error } = await supabase.from('reports').insert({ 
-            user_id: currentUserId, 
-            type, 
-            target_username: targetUser || null,
-            message 
-        });
+        const row = { user_id: currentUserId, type, target_username: target ? target.username : null, target_user_id: target ? target.id : null, message, status: 'open' };
+        let { error } = await supabase.from('reports').insert(row);
+        if (error && /target_user_id|status|column/i.test(error.message || '')) {
+            delete row.target_user_id; delete row.status;
+            ({ error } = await supabase.from('reports').insert(row));
+        }
         if (error) throw error;
-        
-        showToast('Сообщение отправлено! Спасибо.', 'success'); 
-        document.getElementById('support-message').value = ''; 
+
+        showToast('Обращение отправлено! Спасибо.', 'success');
+        document.getElementById('support-message').value = '';
         document.getElementById('support-target-user').value = '';
-        closeSupportModal(); 
-    } catch(err) {
+        document.getElementById('support-msg-counter').innerText = '0 / 1000';
+        await refreshReports();
+        switchSupportTab('my');
+    } catch (err) {
         showToast('Ошибка отправки: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false; btn.classList.remove('opacity-50');
     }
 }
 
-// УДАЛЕНИЕ ЖАЛОБЫ
+// --- УПРАВЛЕНИЕ ЖАЛОБАМИ (АДМИН) ---
+window.setReportFilter = function(f) { reportFilter = f; renderAdminPanel(); }
+
+window.toggleReportResolved = async function(reportId) {
+    if (!isAdmin) return;
+    const r = allReportsData.find(x => String(x.id) === String(reportId));
+    if (!r) return;
+    const resolve = r.status !== 'resolved';
+    const { data, error } = await supabase.from('reports')
+        .update({ status: resolve ? 'resolved' : 'open', resolved_at: resolve ? new Date().toISOString() : null })
+        .eq('id', reportId).select();
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    if (!data || data.length === 0) return showToast('Нет прав на изменение жалоб. Выполни SQL из файла support_setup.sql в Supabase', 'error');
+    Object.assign(r, data[0]);
+    renderAdminPanel();
+    showToast(resolve ? 'Отмечено как решённое' : 'Возвращено в работу', 'success');
+}
+
 window.deleteReport = function(reportId) {
     showConfirm('Удалить эту жалобу?', async () => {
-        const { error } = await supabase.from('reports').delete().match({ id: reportId });
-        if (error) showToast('Ошибка: ' + error.message, 'error');
-        else { showToast('Жалоба удалена', 'success'); await loadData(); }
+        const { data, error } = await supabase.from('reports').delete().eq('id', reportId).select();
+        if (error) return showToast('Ошибка: ' + error.message, 'error');
+        // Без политики DELETE в RLS Supabase молча удаляет 0 строк и не возвращает ошибку
+        if (!data || data.length === 0) return showToast('Не удалено: нет прав (RLS). Выполни SQL из файла support_setup.sql в Supabase', 'error');
+        allReportsData = allReportsData.filter(x => String(x.id) !== String(reportId));
+        renderAdminPanel();
+        showToast('Жалоба удалена', 'success');
     }, 'delete');
 }
+
+window.openReportReply = function(reportId) {
+    const r = allReportsData.find(x => String(x.id) === String(reportId));
+    if (!r) return;
+    replyingReportId = reportId;
+    document.getElementById('report-reply-original').innerText = r.message;
+    document.getElementById('report-reply-text').value = r.admin_reply || '';
+    document.getElementById('report-reply-resolve').checked = true;
+    document.getElementById('report-reply-modal').classList.remove('hidden');
+}
+window.closeReportReply = function() { document.getElementById('report-reply-modal').classList.add('hidden'); replyingReportId = null; }
+window.saveReportReply = async function() {
+    if (!isAdmin || replyingReportId === null) return;
+    const text = document.getElementById('report-reply-text').value.trim();
+    const resolve = document.getElementById('report-reply-resolve').checked;
+    const patch = { admin_reply: text || null };
+    if (resolve) { patch.status = 'resolved'; patch.resolved_at = new Date().toISOString(); }
+    const { data, error } = await supabase.from('reports').update(patch).eq('id', replyingReportId).select();
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    if (!data || data.length === 0) return showToast('Нет прав на изменение. Выполни SQL из файла support_setup.sql', 'error');
+    const r = allReportsData.find(x => String(x.id) === String(replyingReportId));
+    if (r) Object.assign(r, data[0]);
+    closeReportReply();
+    renderAdminPanel();
+    showToast('Ответ сохранён', 'success');
+}
+
+// --- ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ---
+window.openUserProfile = function(userId) {
+    const p = allProfilesData.find(x => x.id === userId);
+    if (!p) return showToast('Профиль не найден', 'error');
+    const rs = allRatingsData.filter(r => r.user_id === userId);
+    const cm = rs.filter(r => r.comment && r.comment.trim() !== '');
+    const avg = rs.length ? (rs.reduce((a, r) => a + r.score, 0) / rs.length).toFixed(1) : '—';
+    const cmIds = new Set(cm.map(c => c.id));
+    const likes = allCommentLikesData.filter(l => cmIds.has(l.rating_id)).length;
+    const isSelf = userId === currentUserId;
+    const isMaster = p.email === MASTER_ADMIN_EMAIL;
+    const isTargetAdmin = p.is_admin || isMaster;
+
+    const stat = (val, label) => `<div class="bg-black/30 border border-white/10 rounded-xl p-3 text-center"><div class="text-xl font-extrabold text-white">${val}</div><div class="text-[10px] uppercase tracking-wider text-gray-400 mt-0.5">${label}</div></div>`;
+
+    const recent = rs.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 8).map(r => {
+        const t = allTracksData.find(x => x.id === r.track_id);
+        if (!t) return '';
+        return `<div onclick="closeUserProfile(); playTrack(${t.id})" class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors">
+            <img src="${escapeHtml(t.cover_url)}" onerror="this.style.visibility='hidden'" class="w-11 h-11 rounded-lg object-cover bg-white/5 flex-shrink-0">
+            <div class="min-w-0 flex-1"><div class="text-sm font-bold text-white truncate">${escapeHtml(t.title)}</div>
+            <div class="text-xs text-gray-400 truncate">${escapeHtml(t.artist)}${r.comment ? ' · «' + escapeHtml(r.comment) + '»' : ''}</div></div>
+            <div class="text-sm font-bold text-yellow-400 flex-shrink-0">${r.score}<span class="text-gray-500 text-xs"> / 30</span></div></div>`;
+    }).join('');
+
+    let adminBlock = '';
+    if (isAdmin) {
+        const against = allReportsData.filter(r => r.target_user_id === userId || (r.target_username || '').toLowerCase() === (p.username || '').toLowerCase()).length;
+        const sent = allReportsData.filter(r => r.user_id === userId).length;
+        adminBlock = `<div class="mt-5 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
+            <div class="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">Для админа</div>
+            <div class="text-sm text-gray-300">Email: <span class="text-white">${escapeHtml(p.email || '—')}</span></div>
+            <div class="text-sm text-gray-300">Жалоб на пользователя: <span class="font-bold ${against ? 'text-red-400' : 'text-white'}">${against}</span> · отправил обращений: <span class="text-white font-bold">${sent}</span></div>
+            ${(!isMaster && !isSelf) ? `<button onclick="closeUserProfile(); toggleAdminStatus('${p.id}', ${!!p.is_admin}, '${escapeHtml(p.email || '')}')" class="mt-3 ${p.is_admin ? 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white' : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-black'} px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">${p.is_admin ? 'Снять админа' : 'Выдать админа'}</button>` : ''}
+        </div>`;
+    }
+
+    const actions = isSelf
+        ? `<button onclick="closeUserProfile(); openProfileModal()" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2.5 rounded-xl text-sm transition-colors neon-btn">Редактировать профиль</button>`
+        : (currentUserId ? `<button onclick="closeUserProfile(); openSupportModal({type:'report', target:'${escapeHtml(p.username).replace(/'/g, '')}'})" class="flex-1 bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-colors">Пожаловаться</button>` : '');
+
+    document.getElementById('user-profile-content').innerHTML = `
+        <div class="h-24 bg-gradient-to-r from-cyan-900/60 via-cyan-500/20 to-transparent"></div>
+        <div class="px-6 pb-6 -mt-12">
+            <div class="flex items-end gap-4">
+                ${avatarMarkup(p, 'w-24 h-24 border-4 !border-gray-900', 'text-4xl')}
+                <div class="pb-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap"><h3 class="text-2xl font-extrabold truncate ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(p.username)}</h3>
+                    ${isTargetAdmin ? '<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>' : ''}</div>
+                    ${isSelf ? '<div class="text-xs text-cyan-400">Это ты</div>' : ''}
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-2 mt-5">${stat(rs.length, 'Оценок')}${stat(cm.length, 'Отзывов')}${stat(avg, 'Ср. балл')}${stat(likes, 'Лайков')}</div>
+            <div class="flex gap-2 mt-4">${actions}<button onclick="shareUserProfile('${p.id}')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors">Ссылка</button></div>
+            ${adminBlock}
+            <h4 class="text-sm font-bold text-gray-300 mt-6 mb-2">Последние оценки</h4>
+            <div class="space-y-1">${recent || '<p class="text-sm text-gray-500 py-4 text-center">Пока ничего не оценил</p>'}</div>
+        </div>`;
+    document.getElementById('user-profile-modal').classList.remove('hidden');
+}
+window.openMyProfile = function() { if (currentUserId) openUserProfile(currentUserId); }
+window.closeUserProfile = function() { document.getElementById('user-profile-modal').classList.add('hidden'); }
+window.shareUserProfile = function(id) {
+    const url = `${window.location.origin}${window.location.pathname}?user=${id}`;
+    navigator.clipboard.writeText(url).then(() => showToast('Ссылка на профиль скопирована!', 'success'));
+}
+
+// --- СКРОЛЛ СВАЙПОМ МЫШЬЮ (на тач-экранах работает нативно) ---
+function initDragScroll() {
+    const main = document.getElementById('main-scroll');
+    if (!main) return;
+    let down = false, startY = 0, startTop = 0;
+    main.addEventListener('pointerdown', e => {
+        if (e.pointerType !== 'mouse' || e.button !== 0) return;
+        if (e.target.closest('button, a, input, textarea, select, label, tr[onclick], [onclick], .rating-slider')) return;
+        down = true; startY = e.clientY; startTop = main.scrollTop;
+    });
+    window.addEventListener('pointermove', e => {
+        if (!down) return;
+        const dy = e.clientY - startY;
+        if (Math.abs(dy) > 4) { main.classList.add('dragging'); main.scrollTop = startTop - dy; }
+    });
+    const stop = () => { down = false; main.classList.remove('dragging'); };
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+}
+initDragScroll();
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    ['user-profile-modal', 'support-modal', 'report-reply-modal'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+});
 
 // --- ЯЗЫКИ ---
 window.changeLanguage = function(lang) { currentLang = lang; localStorage.setItem('te_lang', lang); applyLanguage(); showToast(lang === 'ru' ? 'Язык изменен' : 'Language changed', 'success'); }
@@ -506,7 +757,7 @@ async function loadData() {
             supabase.from('profiles').select('*'), supabase.from('replies').select('*'), supabase.from('reply_likes').select('*'),
             currentUserId ? supabase.from('playlists').select('*').eq('user_id', currentUserId) : Promise.resolve({data: []}),
             currentUserId ? supabase.from('playlist_tracks').select('*') : Promise.resolve({data: []}),
-            isAdmin ? supabase.from('reports').select('*').order('created_at', { ascending: false }) : Promise.resolve({data: []})
+            currentUserId ? (isAdmin ? supabase.from('reports').select('*').order('created_at', { ascending: false }) : supabase.from('reports').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false })) : Promise.resolve({data: []})
         ]);
 
         const tracks = tracksRes.data || []; const ratings = ratingsRes.data || []; const trackLikes = trackLikesRes.data || []; const commentLikes = commentLikesRes.data || [];
@@ -514,6 +765,7 @@ async function loadData() {
         userPlaylists = playlistsRes.data || [];
         allPlaylistTracksData = playlistTracksRes.data || [];
         allReportsData = reportsRes.data || [];
+        allRatingsData = ratings; allCommentLikesData = commentLikes;
 
         const ratingsByTrack = new Map(); ratings.forEach(r => { if (!ratingsByTrack.has(r.track_id)) ratingsByTrack.set(r.track_id, []); ratingsByTrack.get(r.track_id).push(r); });
         const likesByTrack = new Map(); trackLikes.forEach(l => { if (!likesByTrack.has(l.track_id)) likesByTrack.set(l.track_id, []); likesByTrack.get(l.track_id).push(l.user_id); });
@@ -550,6 +802,8 @@ async function loadData() {
         const urlParams = new URLSearchParams(window.location.search);
         const sharedTrackId = urlParams.get('track');
         const sharedPlaylistId = urlParams.get('playlist');
+        const sharedUserId = urlParams.get('user');
+        if (sharedUserId && !userLinkHandled) { userLinkHandled = true; setTimeout(() => openUserProfile(sharedUserId), 600); }
 
         if (sharedTrackId) {
             setTimeout(() => { const track = allTracksData.find(t => t.id == sharedTrackId); if (track) { showToast(`Загружен трек по ссылке`, 'success'); changeCategory('Все'); setTimeout(() => playTrack(track.id), 500); } }, 1000);
@@ -781,40 +1035,57 @@ function renderAdminPanel() {
         tbody.innerHTML = users.map(u => {
             const isTargetAdmin = u.is_admin;
             const isMasterAdmin = u.email === MASTER_ADMIN_EMAIL;
-            
             let actionBtn = '';
             if (isMasterAdmin) {
                 actionBtn = `<span class="text-xs text-gray-500 font-bold">Главный админ</span>`;
             } else {
                 actionBtn = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true, '${u.email}')" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять</button>` : `<button onclick="toggleAdminStatus('${u.id}', false, '${u.email}')" class="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать</button>`;
             }
-            
-            const isUrl = u.avatar_url && u.avatar_url.startsWith('http');
-            const avatarHtml = isUrl ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-sm font-bold text-white" style="color: ${u.avatar_bg === '#ffffff' ? 'black' : 'white'}">${u.avatar_url || escapeHtml(u.username.charAt(0).toUpperCase())}</span>`;
-            const bgStyle = isUrl ? '' : `background-color: ${u.avatar_bg || '#1e293b'}`;
-
-            return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4 flex items-center gap-3"><div class="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden" style="${bgStyle}">${avatarHtml}</div><span class="font-bold text-sm ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Юзер</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
+            return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4"><button onclick="openUserProfile('${u.id}')" class="flex items-center gap-3 text-left group">${avatarMarkup(u)}<span class="font-bold text-sm group-hover:underline ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></button></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Юзер</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
         }).join('');
     }
 
     // РЕНДЕР ЖАЛОБ
-    if (allReportsData.length === 0) {
-        reportsTbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">Жалоб пока нет</td></tr>`;
-    } else {
-        reportsTbody.innerHTML = allReportsData.map(r => {
-            const dateStr = new Date(r.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-            const sender = allProfilesData.find(p => p.id === r.user_id)?.username || 'Неизвестный';
-            const typeText = r.type === 'bug' ? 'Баг' : r.type === 'report' ? 'Жалоба' : 'Другое';
-            
-            return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td class="p-4 text-sm text-white font-bold">${escapeHtml(sender)}</td>
-                <td class="p-4 text-sm text-cyan-400">${typeText}</td>
-                <td class="p-4 text-sm text-red-400 font-bold">${r.target_username ? escapeHtml(r.target_username) : '-'}</td>
-                <td class="p-4 text-sm text-gray-300">${escapeHtml(r.message)} <span class="text-[10px] text-gray-500 block">${dateStr}</span></td>
-                <td class="p-4 text-right"><button onclick="deleteReport(${r.id})" class="text-red-400 hover:text-red-300 p-1" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button></td>
-            </tr>`;
-        }).join('');
+    const openCount = allReportsData.filter(r => r.status !== 'resolved').length;
+    const doneCount = allReportsData.length - openCount;
+    const filtersEl = document.getElementById('admin-reports-filters');
+    if (filtersEl) {
+        const btn = (key, label, n) => `<button onclick="setReportFilter('${key}')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${reportFilter === key ? 'bg-cyan-500 text-black' : 'bg-white/5 text-gray-400 hover:text-white'}">${label} <span class="opacity-70">${n}</span></button>`;
+        filtersEl.innerHTML = btn('all', 'Все', allReportsData.length) + btn('open', 'Открытые', openCount) + btn('resolved', 'Решённые', doneCount);
     }
+
+    const list = allReportsData.filter(r => reportFilter === 'all' ? true : reportFilter === 'resolved' ? r.status === 'resolved' : r.status !== 'resolved');
+    if (list.length === 0) {
+        reportsTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-400">${allReportsData.length === 0 ? 'Жалоб пока нет' : 'В этой вкладке пусто'}</td></tr>`;
+        return;
+    }
+    const checkSvg = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`;
+    reportsTbody.innerHTML = list.map(r => {
+        const done = r.status === 'resolved';
+        const senderP = allProfilesData.find(p => p.id === r.user_id);
+        const targetP = (r.target_user_id && allProfilesData.find(p => p.id === r.target_user_id)) || findProfileByName(r.target_username);
+        const typeText = r.type === 'bug' ? 'Баг' : r.type === 'report' ? 'Жалоба' : 'Другое';
+        const sender = senderP
+            ? `<button onclick="openUserProfile('${senderP.id}')" class="text-sm text-white font-bold hover:underline text-left">${escapeHtml(senderP.username)}</button>`
+            : `<span class="text-sm text-gray-500">Неизвестный</span>`;
+        let target = '<span class="text-gray-500">-</span>';
+        if (r.target_username) {
+            target = targetP
+                ? `<button onclick="openUserProfile('${targetP.id}')" class="text-sm text-red-400 font-bold hover:underline text-left">${escapeHtml(targetP.username)}</button>`
+                : `<span class="text-sm text-gray-500 line-through" title="Такого пользователя нет">${escapeHtml(r.target_username)}</span>`;
+        }
+        const reply = r.admin_reply ? `<div class="mt-2 text-xs text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-2 py-1">Ответ: ${escapeHtml(r.admin_reply)}</div>` : '';
+        return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors ${done ? 'opacity-50' : ''}">
+            <td class="p-4 w-12"><button onclick="toggleReportResolved('${r.id}')" title="${done ? 'Вернуть в работу' : 'Отметить решённой'}" class="w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-colors ${done ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-white/30 text-transparent hover:border-emerald-400 hover:text-emerald-400'}">${checkSvg}</button></td>
+            <td class="p-4">${sender}</td>
+            <td class="p-4 text-sm text-cyan-400">${typeText}</td>
+            <td class="p-4">${target}</td>
+            <td class="p-4 text-sm text-gray-300 ${done ? 'line-through decoration-white/20' : ''}">${escapeHtml(r.message)} <span class="text-[10px] text-gray-500 block">${fmtDate(r.created_at)}</span>${reply}</td>
+            <td class="p-4 text-right whitespace-nowrap">
+                <button onclick="openReportReply('${r.id}')" class="text-cyan-400 hover:text-cyan-300 p-1.5" title="Ответить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg></button>
+                <button onclick="deleteReport('${r.id}')" class="text-red-400 hover:text-red-300 p-1.5" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+            </td></tr>`;
+    }).join('');
 }
 
 function renderCommentsView() {
@@ -845,9 +1116,9 @@ function renderCommentsView() {
                 const repAvatarHtml = isRepUrl ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-white" style="color: ${rep.avatar_bg === '#ffffff' ? 'black' : 'white'}">${rep.avatar_url || escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`;
                 const repBgStyle = isRepUrl ? '' : `background-color: ${rep.avatar_bg || '#1e293b'}`;
 
-                return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span class="text-xs font-bold ${rep.isAdmin ? 'text-red-400' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
+                return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span onclick="openUserProfile('${rep.user_id}')" class="text-xs font-bold cursor-pointer hover:underline ${rep.isAdmin ? 'text-red-400' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
             }).join('');
-            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span class="text-sm font-bold ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
+            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
