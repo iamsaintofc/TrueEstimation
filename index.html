@@ -104,6 +104,16 @@
         .seg-btn:hover { color: #fff; }
         .seg-btn.active { color: #021014; background: linear-gradient(135deg,#a5f3fc,#22d3ee); box-shadow: 0 0 14px rgba(34,211,238,.45); }
         .seg-btn.disabled { opacity: .35; pointer-events: none; }
+
+        /* ===== ПЛЕЕР ===== */
+        #global-play-btn { box-shadow: 0 0 0 6px rgba(34,211,238,.12), 0 0 26px rgba(34,211,238,.55); }
+        #global-play-btn:hover { box-shadow: 0 0 0 9px rgba(34,211,238,.16), 0 0 34px rgba(34,211,238,.8); }
+        #progress-container > div, #volume-container > div { transition: height .15s; }
+        #progress-container:hover > div, #volume-container:hover > div { height: 8px; }
+        #global-progress-bar, #volume-progress-bar { background-image: linear-gradient(90deg,#0e7490,#22d3ee 70%,#e6fdff); }
+        #progress-thumb, #volume-thumb { width: 14px !important; height: 14px !important; margin-left: -7px !important; background: #e6fdff !important; box-shadow: 0 0 12px rgba(165,243,252,.9) !important; border: 0 !important; }
+        #global-player button svg { transition: transform .15s; }
+        #global-player button:hover > svg { transform: scale(1.12); }
         #ban-banner { background: linear-gradient(90deg, rgba(127,29,29,.45), rgba(0,0,0,.2)); border: 1px solid rgba(239,68,68,.45); }
     </style>
 </head>
@@ -299,10 +309,17 @@
     </div>
 
     <!-- ПЛЕЕР -->
-    <div id="global-player" class="fixed bottom-0 left-0 right-0 h-20 md:h-24 bg-black/90 backdrop-blur-xl border-t border-white/10 px-2 md:px-6 z-40 hidden flex items-center justify-between neon-border">
-        <div class="flex items-center gap-2 md:gap-4 w-1/3 md:w-1/4 min-w-0 md:min-w-[200px] p-2 rounded-xl">
-            <div onclick="openCoverModal()" class="cursor-pointer hover:opacity-80 transition-opacity shrink-0"><img id="player-cover" src="" class="w-12 h-12 md:w-14 md:h-14 rounded-md object-cover shadow-lg" onerror="this.style.display='none'"></div>
-            <div class="truncate"><div id="player-title" class="font-bold text-xs md:text-sm truncate text-white">Название</div><div id="player-artist" class="text-[10px] md:text-xs text-gray-400 truncate">Исполнитель</div></div>
+    <div id="global-player" class="fixed bottom-2 left-2 right-2 md:bottom-3 md:left-4 md:right-4 h-20 md:h-24 rounded-2xl overflow-hidden bg-black/80 backdrop-blur-2xl px-3 md:px-6 z-40 hidden flex items-center justify-between neon-border">
+        <div id="player-bg" class="absolute inset-0 -z-10 pointer-events-none opacity-40 bg-cover bg-center" style="filter:blur(40px) saturate(1.4);transform:scale(1.4)"></div>
+        <div class="absolute inset-0 -z-10 pointer-events-none bg-gradient-to-r from-black/70 via-black/40 to-black/70"></div>
+        <div class="flex items-center gap-2 md:gap-4 w-1/3 md:w-[30%] min-w-0 p-1 rounded-xl">
+            <div onclick="openCoverModal()" class="cursor-pointer hover:opacity-80 transition-opacity shrink-0"><img id="player-cover" src="" class="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover ring-1 ring-cyan-300/30 shadow-[0_0_18px_rgba(34,211,238,0.35)]" onerror="this.style.display='none'"></div>
+            <div class="truncate min-w-0"><div id="player-title" class="font-bold text-xs md:text-base truncate text-white">Название</div><div id="player-artist" class="text-[10px] md:text-xs text-gray-400 truncate">Исполнитель</div></div>
+            <div class="hidden md:flex items-center gap-1 ml-1 shrink-0">
+                <button id="player-like-btn" onclick="playerLike(event)" title="Нравится" class="p-2 rounded-full text-gray-400 hover:text-cyan-300 hover:bg-white/5 transition-colors"></button>
+                <button onclick="playerAddToPlaylist()" title="В плейлист" class="p-2 rounded-full text-gray-400 hover:text-cyan-300 hover:bg-white/5 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg></button>
+                <button onclick="playerRate()" title="Оценить" class="p-2 rounded-full text-gray-400 hover:text-cyan-300 hover:bg-white/5 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg></button>
+            </div>
         </div>
         
         <div class="flex-1 max-w-xl flex flex-col items-center gap-1.5 px-2">
@@ -320,7 +337,7 @@
             </div>
         </div>
         
-        <div class="w-auto md:w-1/4 flex justify-end items-center gap-2 md:min-w-[150px] hidden md:flex">
+        <div class="w-auto md:w-[30%] flex justify-end items-center gap-2 hidden md:flex">
             <button onclick="toggleMute()" id="volume-icon-btn" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5" title="Выключить звук">
                 <div id="volume-eq" class="flex items-end gap-[2px] h-4">
                     <div class="eq-bar eq-anim-1"></div><div class="eq-bar eq-anim-2"></div><div class="eq-bar eq-anim-3"></div><div class="eq-bar eq-anim-4"></div>
