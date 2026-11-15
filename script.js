@@ -10,6 +10,7 @@ let currentTrackId = null;
 let allTracksData = []; 
 let currentCategory = 'Главное меню';
 let ratingTrackId = null;
+let previousVolume = 1;
 
 // --- УВЕДОМЛЕНИЯ ---
 function showToast(message, type = 'success') {
@@ -39,7 +40,7 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-// --- АВТОРИЗАЦИЯ И ПРОФИЛЬ ---
+// --- АВТОРИЗАЦИЯ ---
 supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
         document.getElementById('login-btn').classList.add('hidden');
@@ -65,15 +66,11 @@ window.handleLogin = async function() {
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
-        else {
-            showToast('Аккаунт создан! Вы вошли.', 'success');
-            closeLoginModal();
-        }
+        else { showToast('Аккаунт создан! Вы вошли.', 'success'); closeLoginModal(); }
     } else if (error) {
         showToast('Ошибка: ' + error.message, 'error');
     } else {
-        showToast('Успешный вход!', 'success');
-        closeLoginModal();
+        showToast('Успешный вход!', 'success'); closeLoginModal();
     }
 }
 
@@ -82,11 +79,16 @@ window.logout = async function() {
     showToast('Вы вышли из аккаунта', 'success');
 }
 
-// --- ПЛЕЕР (Оптимизированный) ---
+// --- ЛОГИКА ПЛЕЕРА ---
 window.playTrack = function(trackId) {
     const track = allTracksData.find(t => t.id === trackId);
     if (!track) return;
-    if (currentTrackId === trackId) { toggleGlobalPlay(); return; }
+    
+    // Если кликнули на тот же трек
+    if (currentTrackId === trackId) { 
+        toggleGlobalPlay(); 
+        return; 
+    }
 
     currentTrackId = trackId;
     globalAudio.src = track.audio_url;
@@ -111,23 +113,50 @@ window.toggleGlobalPlay = function() {
     updateAllPlayIcons();
 }
 
+// Переключение на следующий трек
+window.playNext = function() {
+    if (!currentTrackId || allTracksData.length === 0) return;
+    const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
+    let nextIndex = currentIndex + 1;
+    if (nextIndex >= allTracksData.length) nextIndex = 0; // Зацикливаем
+    playTrack(allTracksData[nextIndex].id);
+}
+
+// Переключение на предыдущий трек
+window.playPrev = function() {
+    if (!currentTrackId || allTracksData.length === 0) return;
+    const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
+    let prevIndex = currentIndex - 1;
+    if (prevIndex < 0) prevIndex = allTracksData.length - 1; // Зацикливаем
+    playTrack(allTracksData[prevIndex].id);
+}
+
 function updateAllPlayIcons() {
     document.querySelectorAll('.card-play-icon').forEach(icon => {
+        // Возвращаем стоковый треугольник
         icon.innerHTML = `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
     });
     if (currentTrackId && !globalAudio.paused) {
         const activeIcons = document.querySelectorAll(`.card-icon-${currentTrackId}`);
-        activeIcons.forEach(icon => { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; });
+        activeIcons.forEach(icon => { 
+            // Ставим паузу без сдвига
+            icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; 
+        });
     }
 }
 
 function updateGlobalPlayPauseIcon(isPlaying) {
     const icon = document.getElementById('global-play-icon');
-    if (isPlaying) { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; icon.classList.remove('ml-1'); } 
-    else { icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; icon.classList.add('ml-1'); }
+    if (isPlaying) { 
+        icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; 
+        icon.classList.remove('ml-0.5'); // Убираем сдвиг для паузы
+    } else { 
+        icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; 
+        icon.classList.add('ml-0.5'); // Добавляем сдвиг для треугольника
+    }
 }
 
-// Слушатели плеера
+// Слушатели аудио
 globalAudio.addEventListener('timeupdate', () => {
     if (!globalAudio.duration) return;
     const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
@@ -142,17 +171,37 @@ globalAudio.addEventListener('loadedmetadata', () => {
 });
 
 globalAudio.addEventListener('ended', () => {
-    updateGlobalPlayPauseIcon(false);
-    document.getElementById('global-progress-bar').style.width = `0%`;
-    document.getElementById('global-slider').value = 0;
-    document.getElementById('global-current-time').innerText = "0:00";
-    updateAllPlayIcons();
+    // При окончании трека автоматически включаем следующий
+    playNext();
 });
 
 window.seekGlobalAudio = function(value) { globalAudio.currentTime = value; }
+
+// --- ГРОМКОСТЬ ---
 window.changeVolume = function(value) {
     globalAudio.volume = value;
+    previousVolume = value;
     document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
+    document.getElementById('global-volume-slider').value = value;
+    
+    // Меняем иконку в зависимости от громкости
+    const icon = document.getElementById('volume-icon');
+    if(value == 0) {
+        icon.innerHTML = `<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`;
+    } else if(value < 0.5) {
+        icon.innerHTML = `<path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>`;
+    } else {
+        icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>`;
+    }
+}
+
+window.toggleMute = function() {
+    if (globalAudio.volume > 0) {
+        previousVolume = globalAudio.volume;
+        changeVolume(0);
+    } else {
+        changeVolume(previousVolume || 1);
+    }
 }
 
 // --- МОДАЛЬНОЕ ОКНО ОЦЕНКИ ---
@@ -253,13 +302,11 @@ function renderCategories() {
     container.innerHTML = '';
     const baseCategories = ['Главное меню', 'Все'];
     const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все')));
-    const allCategories = [...baseCategories, ...dynamicCategories];
-
-    // Подсветка активного таба в навигации
+    
+    // Подсветка
     document.getElementById('nav-main').className = currentCategory === 'Главное меню' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
     document.getElementById('nav-all').className = currentCategory === 'Все' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
 
-    // Рендер динамических категорий
     dynamicCategories.forEach(cat => {
         const isActive = cat === currentCategory;
         const btnClass = isActive ? 'bg-white/10 text-white font-bold' : 'text-gray-300 hover:text-white hover:bg-white/5 font-medium';
@@ -349,7 +396,6 @@ function renderTracksList() {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
         const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
 
-        // Строка списка (как в Яндексе)
         const trackHTML = `
             <div class="group flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default">
                 
