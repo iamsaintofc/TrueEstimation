@@ -133,7 +133,11 @@ function applyLanguage() {
         if(document.getElementById('nav-all')) document.getElementById('nav-all').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>${t.all}`;
         if(document.getElementById('nav-comments')) document.getElementById('nav-comments').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>${t.comments}`;
         if(document.getElementById('nav-admin')) document.getElementById('nav-admin').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>${t.admin}`;
-        if(document.getElementById('nav-liked')) document.getElementById('nav-liked').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>${t.liked}`;
+        
+        // Кнопка "Мне понравилось" теперь рендерится в renderSidebarPlaylists, поэтому мы просто обновляем ее текст, если она есть
+        const navLiked = document.getElementById('nav-liked');
+        if(navLiked) navLiked.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>${t.liked}`;
+
         if(document.getElementById('search-input')) document.getElementById('search-input').placeholder = t.search;
         const langSelect = document.getElementById('settings-language'); if(langSelect) langSelect.value = currentLang;
         const addFormTitle = document.querySelector('#admin-view-container h3'); if(addFormTitle) addFormTitle.innerText = t.addTrack;
@@ -142,6 +146,7 @@ function applyLanguage() {
         inputs.forEach((id, i) => { const el = document.getElementById(id); if(el) el.placeholder = placeholders[i]; });
         const plModalTitle = document.querySelector('#create-playlist-modal h3'); if(plModalTitle) plModalTitle.innerText = t.newPlaylist;
         const plModalInput = document.getElementById('new-playlist-name'); if(plModalInput) plModalInput.placeholder = t.plName;
+        
         renderCategories(); 
         renderView();
     } catch (err) {
@@ -502,23 +507,9 @@ async function loadData() {
         const statsEl = document.getElementById('stats-container');
         if(statsEl) statsEl.innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
         
-        const plContainer = document.getElementById('playlists-container');
-        if(plContainer) {
-            plContainer.innerHTML = `
-                <button onclick="changeCategory('Liked')" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-liked"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>${translations[currentLang].liked}</button>
-            ` + userPlaylists.map(pl => `
-                <div class="flex items-center justify-between group/pl w-full rounded-xl hover:bg-white/10 transition-colors pr-2">
-                    <button onclick="changeCategory('Playlist_${pl.id}')" class="flex-1 flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-300 group-hover/pl:text-white text-left" id="nav-playlist-${pl.id}">
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-                        <span class="truncate">${escapeHtml(pl.name)}</span>
-                    </button>
-                    <button onclick="deletePlaylist(${pl.id}, event)" class="opacity-0 group-hover/pl:opacity-100 text-gray-500 hover:text-red-400 p-1 transition-all" title="Удалить плейлист">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                </div>
-            `).join('');
-        }
-
+        // ВЫЗЫВАЕМ ОТРИСОВКУ САЙДБАРА С ПЛЕЙЛИСТАМИ
+        renderSidebarPlaylists();
+        
         applyLanguage(); 
         renderView(); 
 
@@ -544,6 +535,34 @@ async function loadData() {
         console.error("Data Load Error:", err);
         showToast("Ошибка загрузки данных: " + err.message, 'error');
     }
+}
+
+// ОТДЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПЛЕЙЛИСТОВ В САЙДБАРЕ
+function renderSidebarPlaylists() {
+    const plContainer = document.getElementById('playlists-container');
+    if(!plContainer) return;
+
+    const t = translations[currentLang];
+    let html = `
+        <button onclick="changeCategory('Liked')" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-liked">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            ${t.liked}
+        </button>
+    `;
+
+    html += userPlaylists.map(pl => `
+        <div class="flex items-center justify-between group/pl w-full rounded-xl hover:bg-white/10 transition-colors pr-2">
+            <button onclick="changeCategory('Playlist_${pl.id}')" class="flex-1 flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-300 group-hover/pl:text-white text-left" id="nav-playlist-${pl.id}">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                <span class="truncate">${escapeHtml(pl.name)}</span>
+            </button>
+            <button onclick="deletePlaylist(${pl.id}, event)" class="opacity-0 group-hover/pl:opacity-100 text-gray-500 hover:text-red-400 p-1 transition-all" title="Удалить плейлист">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </div>
+    `).join('');
+
+    plContainer.innerHTML = html;
 }
 
 function renderCategories() {
