@@ -11,6 +11,9 @@ const translations = {
 };
 let currentLang = localStorage.getItem('te_lang') || 'ru';
 
+// 20 КРУТЫХ ЭМОДЗИ ДЛЯ АВАТАРОК
+const presetAvatars = ['😎','🔥','🎧','🎵','🚀','👾','🐉','🍕','👑','😈','🤖','🦊','🐼','🦁','🍀','🌙','⚡','💎','🎸','🎹'];
+
 const globalAudio = new Audio();
 let currentTrackId = null; let allTracksData = []; let allCommentsData = []; let allProfilesData = []; let allRepliesData = []; 
 let currentCategory = 'Главное меню'; let ratingTrackId = null; let currentUserRating = null;
@@ -19,6 +22,7 @@ let isShuffle = false; let repeatMode = 0; let currentSort = 'rating'; let curre
 let confirmCallback = null; let searchQuery = '';
 let userPlaylists = []; let currentPlaylistId = null; let currentTrackToAddToPlaylist = null;
 let allPlaylistTracksData = [];
+let selectedEmojiAvatar = null;
 
 function escapeHtml(str) { if (str === null || str === undefined) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function showToast(message, type = 'success') {
@@ -33,6 +37,17 @@ function showToast(message, type = 'success') {
 }
 function formatTime(seconds) { if (isNaN(seconds)) return "0:00"; const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60); return `${mins}:${secs < 10 ? '0' : ''}${secs}`; }
 window.toggleMobileMenu = () => document.getElementById('sidebar').classList.toggle('open');
+
+// --- ШАРИНГ ---
+window.shareTrack = function(trackId, event) {
+    event.stopPropagation();
+    const url = `${window.location.origin}${window.location.pathname}?track=${trackId}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast(currentLang === 'ru' ? 'Ссылка на трек скопирована!' : 'Track link copied!', 'success');
+    }).catch(() => {
+        showToast('Ошибка копирования', 'error');
+    });
+}
 
 // --- ЯЗЫКИ ---
 window.changeLanguage = function(lang) {
@@ -76,23 +91,83 @@ async function updateProfileUI() {
     currentUserProfile = await fetchProfile(currentUserId);
     const session = await supabase.auth.getSession(); const userEmail = session.data.session?.user?.email;
     isAdmin = (userEmail === MASTER_ADMIN_EMAIL) || currentUserProfile.is_admin;
+    
     document.getElementById('login-btn').classList.add('hidden'); document.getElementById('user-profile').classList.remove('hidden');
     document.getElementById('user-username-display').innerText = currentUserProfile.username; document.getElementById('user-email-display').innerText = userEmail;
+    
     const avatarImg = document.getElementById('user-avatar-img'); const avatarLetter = document.getElementById('user-avatar-letter');
     const headerBtn = document.getElementById('header-avatar-btn'); const adminBadge = document.getElementById('admin-badge-header'); const navAdmin = document.getElementById('nav-admin');
-    if (currentUserProfile.avatar_url) { avatarImg.src = currentUserProfile.avatar_url; avatarImg.classList.remove('hidden'); avatarLetter.classList.add('hidden'); } 
-    else { avatarImg.classList.add('hidden'); avatarLetter.classList.remove('hidden'); avatarLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase(); }
+    
+    // Рендер аватарки (URL или Эмодзи)
+    const isUrl = currentUserProfile.avatar_url && currentUserProfile.avatar_url.startsWith('http');
+    if (isUrl) {
+        avatarImg.src = currentUserProfile.avatar_url; avatarImg.classList.remove('hidden'); avatarLetter.classList.add('hidden');
+    } else if (currentUserProfile.avatar_url) {
+        avatarImg.classList.add('hidden'); avatarLetter.classList.remove('hidden'); avatarLetter.innerText = currentUserProfile.avatar_url;
+    } else {
+        avatarImg.classList.add('hidden'); avatarLetter.classList.remove('hidden'); avatarLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase();
+    }
+    
     if (isAdmin) { headerBtn.classList.add('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.remove('hidden'); navAdmin.classList.remove('hidden'); } 
     else { headerBtn.classList.remove('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.add('hidden'); navAdmin.classList.add('hidden'); }
+    
+    updateProfilePreview();
 }
-window.openProfileModal = function() { if (!currentUserProfile) return; document.getElementById('settings-username').value = currentUserProfile.username; const previewImg = document.getElementById('settings-avatar-preview'); const previewLetter = document.getElementById('settings-avatar-letter'); if (currentUserProfile.avatar_url) { previewImg.src = currentUserProfile.avatar_url; previewImg.classList.remove('hidden'); previewLetter.classList.add('hidden'); } else { previewImg.classList.add('hidden'); previewLetter.classList.remove('hidden'); previewLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase(); } document.getElementById('profile-modal').classList.remove('hidden'); }
+
+function updateProfilePreview() {
+    const previewImg = document.getElementById('settings-avatar-preview'); 
+    const previewLetter = document.getElementById('settings-avatar-letter');
+    const previewEmoji = document.getElementById('settings-avatar-emoji');
+    
+    let currentAvatar = selectedEmojiAvatar || currentUserProfile?.avatar_url;
+    
+    if (currentAvatar && currentAvatar.startsWith('http')) {
+        previewImg.src = currentAvatar; previewImg.classList.remove('hidden');
+        previewLetter.classList.add('hidden'); previewEmoji.classList.add('hidden');
+    } else if (currentAvatar) {
+        previewImg.classList.add('hidden'); previewLetter.classList.add('hidden');
+        previewEmoji.innerText = currentAvatar; previewEmoji.classList.remove('hidden');
+    } else {
+        previewImg.classList.add('hidden'); previewEmoji.classList.add('hidden');
+        previewLetter.innerText = currentUserProfile ? currentUserProfile.username.charAt(0).toUpperCase() : 'U';
+        previewLetter.classList.remove('hidden');
+    }
+}
+
+window.openProfileModal = function() { 
+    if (!currentUserProfile) return; 
+    selectedEmojiAvatar = null;
+    document.getElementById('settings-username').value = currentUserProfile.username; 
+    
+    // Рендер эмодзи-пикера
+    document.getElementById('emoji-avatar-picker').innerHTML = presetAvatars.map(emoji => 
+        `<button onclick="setEmojiAvatar('${emoji}')" class="text-2xl hover:scale-125 hover:bg-white/10 rounded-lg p-1 transition-all ${currentUserProfile.avatar_url === emoji ? 'bg-green-500/20 neon-border' : ''}">${emoji}</button>`
+    ).join('');
+
+    updateProfilePreview();
+    document.getElementById('profile-modal').classList.remove('hidden'); 
+}
 window.closeProfileModal = () => document.getElementById('profile-modal').classList.add('hidden');
+
+window.setEmojiAvatar = function(emoji) {
+    selectedEmojiAvatar = emoji;
+    updateProfilePreview();
+    // Обновляем подсветку в пикере
+    document.querySelectorAll('#emoji-avatar-picker button').forEach(btn => {
+        btn.className = btn.innerText === emoji 
+            ? 'text-2xl hover:scale-125 hover:bg-white/10 rounded-lg p-1 transition-all bg-green-500/20 neon-border' 
+            : 'text-2xl hover:scale-125 hover:bg-white/10 rounded-lg p-1 transition-all';
+    });
+}
 
 window.saveProfile = async function() {
     const newUsername = document.getElementById('settings-username').value.trim(); 
     if (!newUsername) return showToast('Никнейм не может быть пустым', 'error');
+    
     const fileInput = document.getElementById('settings-avatar-file');
-    let avatarUrl = currentUserProfile.avatar_url;
+    let avatarUrl = selectedEmojiAvatar || currentUserProfile.avatar_url;
+    
+    // Если выбран файл, загружаем его
     if (fileInput.files.length > 0) {
         const file = fileInput.files[0]; const fileExt = file.name.split('.').pop(); const fileName = `${currentUserId}-${Date.now()}.${fileExt}`;
         showToast('Загрузка аватарки...', 'success');
@@ -101,9 +176,19 @@ window.saveProfile = async function() {
         const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
         avatarUrl = publicUrlData.publicUrl;
     }
+
     const { error } = await supabase.from('profiles').upsert({ id: currentUserId, username: newUsername, avatar_url: avatarUrl, language: currentLang });
-    if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast('Профиль обновлён!', 'success'); closeProfileModal(); await updateProfileUI(); await loadData(); }
+    
+    if (error) {
+        // Отлавливаем ошибку уникальности никнейма
+        if (error.code === '23505') showToast('Этот никнейм уже занят!', 'error');
+        else showToast('Ошибка: ' + error.message, 'error');
+    } else { 
+        showToast('Профиль обновлён!', 'success'); 
+        closeProfileModal(); 
+        await updateProfileUI(); 
+        await loadData(); 
+    }
 }
 
 // --- АВТОРИЗАЦИЯ ---
@@ -117,7 +202,7 @@ window.handleLogin = async function() {
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
-        else { showToast('Аккаунт создан!', 'success'); await supabase.from('profiles').insert({ id: signUpData.user.id, username: 'User_' + signUpData.user.id.substring(0, 4), email: email }); closeLoginModal(); }
+        else { showToast('Аккаунт создан!', 'success'); closeLoginModal(); }
     } else if (error) { showToast('Ошибка: ' + error.message, 'error'); } else { showToast('Успешный вход!', 'success'); closeLoginModal(); }
 }
 window.handlePasswordReset = async function() {
@@ -316,7 +401,6 @@ function renderCategories() {
     document.getElementById('nav-comments').className = currentCategory === 'Комментарии' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left neon-text' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
     document.getElementById('nav-liked').className = currentCategory === 'Liked' ? 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left neon-text' : 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
     
-    // ИСПРАВЛЕНИЕ: Строго скрываем кнопку Админа, если нет прав
     const adminBtnClass = currentCategory === 'AdminPanel' 
         ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 transition-colors text-left' 
         : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left';
@@ -348,7 +432,7 @@ function renderView() {
     if (currentCategory === 'Главное меню') { heroContainer.classList.remove('hidden'); renderHero(); } 
     else if (currentCategory === 'Комментарии') { commentsViewContainer.classList.remove('hidden'); renderCommentsView(); } 
     else if (currentCategory === 'AdminPanel') {
-        if (!isAdmin) { changeCategory('Главное меню'); return; } // Защита от перехода
+        if (!isAdmin) { changeCategory('Главное меню'); return; }
         adminViewContainer.classList.remove('hidden'); adminViewContainer.classList.add('flex'); renderAdminPanel();
     } else {
         listViewContainer.classList.remove('hidden');
@@ -379,14 +463,18 @@ function renderHero() {
             <div class="absolute -top-32 -right-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl animate-pulse"></div>
             <div class="absolute -bottom-32 -left-32 w-96 h-96 bg-green-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
             <div class="text-green-400 text-xs font-bold tracking-widest uppercase mb-6 flex items-center gap-3 z-10 neon-text"><span>🏆</span> ТРЕК №1 <span>🏆</span></div>
+            
             <div class="relative z-10 mb-8">
                 <img src="${topTrack.cover_url ? escapeHtml(topTrack.cover_url) : 'https://via.placeholder.com/500?text=No+Cover'}" class="w-48 h-48 md:w-64 md:h-64 rounded-2xl object-cover shadow-[0_0_30px_rgba(34,197,94,0.4)] border-2 border-green-500/50 group-hover:scale-[1.03] transition-transform duration-500">
-                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-end gap-1 h-8 bg-black/60 px-3 py-1.5 rounded-full backdrop-blur-md neon-border">
+                <!-- ФИКС ЭКВАЛАЙЗЕРА (теперь аккуратно в углу) -->
+                <div class="absolute bottom-2 right-2 flex items-end gap-1 h-6 bg-black/80 px-2 py-1.5 rounded-lg border border-green-500/50">
                     <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
                 </div>
             </div>
+            
             <h2 class="text-4xl md:text-6xl font-extrabold mb-2 tracking-tight z-10 line-clamp-1 text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-emerald-500 drop-shadow-[0_0_15px_rgba(34,197,94,0.5)]">${escapeHtml(topTrack.title)}</h2>
             <p class="text-lg text-gray-300 mb-8 z-10 font-medium tracking-wide">${escapeHtml(topTrack.artist || 'TrueEstimation')}</p>
+            
             <div class="flex flex-col md:flex-row items-center justify-center gap-8 z-10 w-full">
                 <div class="flex items-center gap-6 bg-black/60 px-6 py-3 rounded-2xl border border-white/10 neon-border">
                     <button onclick="playTrack(${topId})" class="w-14 h-14 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-xl hover:scale-110 neon-btn pulse-neon">
@@ -397,7 +485,12 @@ function renderHero() {
                         <div class="text-xs text-gray-400 font-medium">${topTrack.votesCount} оценок</div>
                     </div>
                 </div>
-                <button onclick="openRatingModal(${topId})" class="bg-white/10 hover:bg-white/20 border border-white/20 px-8 py-4 rounded-2xl font-bold text-lg transition-all active:scale-95 neon-btn">Оценить трек</button>
+                <div class="flex items-center gap-3">
+                    <button onclick="openRatingModal(${topId})" class="bg-white/10 hover:bg-white/20 border border-white/20 px-6 py-3 rounded-2xl font-bold text-base transition-all active:scale-95 neon-btn">Оценить</button>
+                    <button onclick="shareTrack(${topId}, event)" class="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl transition-all active:scale-95 neon-btn" title="Поделиться">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
     `; 
@@ -424,8 +517,9 @@ function renderTracksList() {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused; const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`; const trackIdArg = Number(track.id);
         const heartIcon = track.userLiked ? `<svg class="w-4 h-4 md:w-5 md:h-5 text-red-500 fill-current drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
         const playlistIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>`;
+        const shareIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>`;
 
-        return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-green-500/30 hover:shadow-[0_0_15px_rgba(34,197,94,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-20 md:w-28 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button></div><div class="w-16 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
+        return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-green-500/30 hover:shadow-[0_0_15px_rgba(34,197,94,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-28 md:w-32 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-red-500' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
     });
     container.innerHTML = htmlParts.join('');
 }
@@ -436,7 +530,12 @@ function renderAdminPanel() {
     tbody.innerHTML = users.map(u => {
         const isTargetAdmin = u.is_admin;
         const actionBtn = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true)" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять</button>` : `<button onclick="toggleAdminStatus('${u.id}', false)" class="bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать</button>`;
-        return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4 flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(u.username.charAt(0).toUpperCase())}</span>`}</div><span class="font-bold text-sm ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Юзер</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
+        
+        // Отрисовка аватарки юзера в админке (URL или Эмодзи)
+        const isUrl = u.avatar_url && u.avatar_url.startsWith('http');
+        const avatarHtml = isUrl ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-sm font-bold text-gray-300">${u.avatar_url || escapeHtml(u.username.charAt(0).toUpperCase())}</span>`;
+
+        return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4 flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">${avatarHtml}</div><span class="font-bold text-sm ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Юзер</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
     }).join('');
 }
 
@@ -452,16 +551,41 @@ function renderCommentsView() {
         const deleteBtn = comment.isOwn ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
         const authorAdminBadge = comment.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
         
+        // Рендер аватарки автора коммента
+        const isCommentUrl = comment.avatar_url && comment.avatar_url.startsWith('http');
+        const commentAvatarHtml = isCommentUrl 
+            ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` 
+            : `<span class="text-sm md:text-lg font-bold text-gray-300">${comment.avatar_url || escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`;
+
         const repliesHtml = comment.replies.map(rep => {
             const repDate = new Date(rep.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
             const repDeleteBtn = rep.isOwn ? `<button onclick="deleteReply(${rep.id})" class="text-gray-500 hover:text-red-400 ml-2 transition-colors" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             const repHeart = rep.userLiked ? `<svg class="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 text-gray-500 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const repAdminBadge = rep.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
-            return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden">${rep.avatar_url ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span class="text-xs font-bold ${rep.isAdmin ? 'text-red-400' : 'text-green-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
+            
+            // Аватарка автора ответа
+            const isRepUrl = rep.avatar_url && rep.avatar_url.startsWith('http');
+            const repAvatarHtml = isRepUrl ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${rep.avatar_url || escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`;
+
+            return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span class="text-xs font-bold ${rep.isAdmin ? 'text-red-400' : 'text-green-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
         }).join('');
-        return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-green-500/30 hover:shadow-[0_0_15px_rgba(34,197,94,0.1)]"><div class="w-12 h-12 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">${comment.avatar_url ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-lg font-bold text-gray-300">${escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span class="text-sm font-bold ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-green-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-green-500"><button onclick="submitReply(${comment.id})" class="bg-green-500 hover:bg-green-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
+        return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-green-500/30 hover:shadow-[0_0_15px_rgba(34,197,94,0.1)]"><div class="w-12 h-12 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span class="text-sm font-bold ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-green-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-green-500"><button onclick="submitReply(${comment.id})" class="bg-green-500 hover:bg-green-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
     });
     container.innerHTML = htmlParts.join('');
+}
+
+// Проверка ссылки на трек при загрузке (для шаринга)
+const urlParams = new URLSearchParams(window.location.search);
+const sharedTrackId = urlParams.get('track');
+if (sharedTrackId) {
+    setTimeout(() => {
+        const track = allTracksData.find(t => t.id == sharedTrackId);
+        if (track) {
+            showToast(`Загружен трек по ссылке`, 'success');
+            changeCategory('Все');
+            setTimeout(() => playTrack(track.id), 500);
+        }
+    }, 1000);
 }
 
 loadData();
