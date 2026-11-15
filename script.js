@@ -4,7 +4,7 @@ const supabaseUrl = 'https://szmwwykgtwdosauounds.supabase.co';
 const supabaseKey = 'sb_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const MASTER_ADMIN_EMAIL = 'zahavalgovno777@gmail.com'; // Твоя почта
+const MASTER_ADMIN_EMAIL = 'zahavalgovno777@gmail.com';
 
 const globalAudio = new Audio();
 let currentTrackId = null;
@@ -15,15 +15,11 @@ let isShuffle = false; let repeatMode = 0; let currentSort = 'rating'; let curre
 let confirmCallback = null;
 
 // --- ХЕЛПЕРЫ ---
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+function escapeHtml(str) { if (str === null || str === undefined) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container'); const toast = document.createElement('div');
-    const borderColor = type === 'success' ? 'border-green-500' : 'border-red-500';
-    const textColor = type === 'success' ? 'text-green-400' : 'text-red-400';
+    const borderColor = type === 'success' ? 'border-green-500' : 'border-red-500'; const textColor = type === 'success' ? 'text-green-400' : 'text-red-400';
     const icon = type === 'success' ? `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>` : `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
     toast.className = `bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl border-l-4 ${borderColor} flex items-center gap-3 transition-all duration-300 translate-y-[-20px] opacity-0 pointer-events-auto`;
     toast.innerHTML = `<div class="${textColor}">${icon}</div><span class="font-medium text-sm">${message}</span>`;
@@ -34,6 +30,31 @@ function showToast(message, type = 'success') {
 
 function formatTime(seconds) { if (isNaN(seconds)) return "0:00"; const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60); return `${mins}:${secs < 10 ? '0' : ''}${secs}`; }
 
+// --- ИНИЦИАЛИЗАЦИЯ ЗВУКА ---
+const savedVol = parseFloat(localStorage.getItem('te_volume'));
+if (!isNaN(savedVol)) {
+    globalAudio.volume = savedVol;
+    previousVolume = savedVol > 0 ? savedVol : 1;
+    document.getElementById('global-volume-slider').value = savedVol;
+    document.getElementById('volume-progress-bar').style.width = `${savedVol * 100}%`;
+    // Обновляем иконку при старте
+    setTimeout(() => changeVolume(savedVol), 100);
+}
+
+// Сохраняем время при закрытии/обновлении страницы
+window.addEventListener('beforeunload', () => {
+    if (currentTrackId) {
+        localStorage.setItem('te_trackId', currentTrackId);
+        localStorage.setItem('te_currentTime', globalAudio.currentTime);
+    }
+});
+globalAudio.addEventListener('pause', () => {
+    if (currentTrackId) {
+        localStorage.setItem('te_trackId', currentTrackId);
+        localStorage.setItem('te_currentTime', globalAudio.currentTime);
+    }
+});
+
 // --- ПРОФИЛИ ---
 async function fetchProfile(userId) {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -42,87 +63,48 @@ async function fetchProfile(userId) {
 }
 
 async function updateProfileUI() {
-    if (!currentUserId) {
-        document.getElementById('login-btn').classList.remove('hidden'); document.getElementById('user-profile').classList.add('hidden');
-        document.getElementById('nav-admin').classList.add('hidden'); isAdmin = false; return;
-    }
+    if (!currentUserId) { document.getElementById('login-btn').classList.remove('hidden'); document.getElementById('user-profile').classList.add('hidden'); document.getElementById('nav-admin').classList.add('hidden'); isAdmin = false; return; }
     
     currentUserProfile = await fetchProfile(currentUserId);
     const session = await supabase.auth.getSession(); const userEmail = session.data.session?.user?.email;
-    
-    // Админ если почта совпадает с главной ИЛИ в БД стоит флаг is_admin
     isAdmin = (userEmail === MASTER_ADMIN_EMAIL) || currentUserProfile.is_admin;
     
-    document.getElementById('login-btn').classList.add('hidden');
-    document.getElementById('user-profile').classList.remove('hidden');
-    document.getElementById('user-username-display').innerText = currentUserProfile.username;
-    document.getElementById('user-email-display').innerText = userEmail;
+    document.getElementById('login-btn').classList.add('hidden'); document.getElementById('user-profile').classList.remove('hidden');
+    document.getElementById('user-username-display').innerText = currentUserProfile.username; document.getElementById('user-email-display').innerText = userEmail;
     
-    const avatarImg = document.getElementById('user-avatar-img');
-    const avatarLetter = document.getElementById('user-avatar-letter');
-    const headerBtn = document.getElementById('header-avatar-btn');
-    const adminBadge = document.getElementById('admin-badge-header');
-    const navAdmin = document.getElementById('nav-admin');
+    const avatarImg = document.getElementById('user-avatar-img'); const avatarLetter = document.getElementById('user-avatar-letter');
+    const headerBtn = document.getElementById('header-avatar-btn'); const adminBadge = document.getElementById('admin-badge-header'); const navAdmin = document.getElementById('nav-admin');
     
     if (currentUserProfile.avatar_url) { avatarImg.src = currentUserProfile.avatar_url; avatarImg.classList.remove('hidden'); avatarLetter.classList.add('hidden'); } 
     else { avatarImg.classList.add('hidden'); avatarLetter.classList.remove('hidden'); avatarLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase(); }
 
-    // Стилизация под Админа
-    if (isAdmin) {
-        headerBtn.classList.add('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]');
-        adminBadge.classList.remove('hidden');
-        navAdmin.classList.remove('hidden');
-    } else {
-        headerBtn.classList.remove('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]');
-        adminBadge.classList.add('hidden');
-        navAdmin.classList.add('hidden');
-    }
+    if (isAdmin) { headerBtn.classList.add('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.remove('hidden'); navAdmin.classList.remove('hidden'); } 
+    else { headerBtn.classList.remove('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.add('hidden'); navAdmin.classList.add('hidden'); }
 }
 
-window.openProfileModal = function() {
-    if (!currentUserProfile) return;
-    document.getElementById('settings-username').value = currentUserProfile.username;
-    document.getElementById('settings-avatar').value = currentUserProfile.avatar_url || '';
-    const previewImg = document.getElementById('settings-avatar-preview'); const previewLetter = document.getElementById('settings-avatar-letter');
-    if (currentUserProfile.avatar_url) { previewImg.src = currentUserProfile.avatar_url; previewImg.classList.remove('hidden'); previewLetter.classList.add('hidden'); } 
-    else { previewImg.classList.add('hidden'); previewLetter.classList.remove('hidden'); previewLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase(); }
-    document.getElementById('profile-modal').classList.remove('hidden');
-}
-
+window.openProfileModal = function() { if (!currentUserProfile) return; document.getElementById('settings-username').value = currentUserProfile.username; document.getElementById('settings-avatar').value = currentUserProfile.avatar_url || ''; const previewImg = document.getElementById('settings-avatar-preview'); const previewLetter = document.getElementById('settings-avatar-letter'); if (currentUserProfile.avatar_url) { previewImg.src = currentUserProfile.avatar_url; previewImg.classList.remove('hidden'); previewLetter.classList.add('hidden'); } else { previewImg.classList.add('hidden'); previewLetter.classList.remove('hidden'); previewLetter.innerText = currentUserProfile.username.charAt(0).toUpperCase(); } document.getElementById('profile-modal').classList.remove('hidden'); }
 window.closeProfileModal = () => document.getElementById('profile-modal').classList.add('hidden');
 
 window.saveProfile = async function() {
-    const newUsername = document.getElementById('settings-username').value.trim();
-    const newAvatar = document.getElementById('settings-avatar').value.trim();
+    const newUsername = document.getElementById('settings-username').value.trim(); const newAvatar = document.getElementById('settings-avatar').value.trim();
     if (!newUsername) return showToast('Никнейм не может быть пустым', 'error');
-    
-    const { error } = await supabase.from('profiles').upsert({
-        id: currentUserId, username: newUsername, avatar_url: newAvatar || null
-    });
-    
+    const { error } = await supabase.from('profiles').upsert({ id: currentUserId, username: newUsername, avatar_url: newAvatar || null });
     if (error) showToast('Ошибка: ' + error.message, 'error');
     else { showToast('Профиль обновлён!', 'success'); closeProfileModal(); await updateProfileUI(); await loadData(); }
 }
 
-// --- УПРАВЛЕНИЕ АДМИНАМИ (Только для тебя) ---
 window.toggleAdminStatus = async function(targetUserId, currentStatus) {
     if (!isAdmin) return;
     showConfirm(currentStatus ? 'Снять права администратора с этого пользователя?' : 'Выдать права администратора этому пользователю?', async () => {
         const { error } = await supabase.from('profiles').update({ is_admin: !currentStatus }).eq('id', targetUserId);
-        if (error) showToast('Ошибка: ' + error.message, 'error');
-        else { showToast('Права обновлены!', 'success'); await loadData(); }
+        if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Права обновлены!', 'success'); await loadData(); }
     });
 }
 
 // --- АВТОРИЗАЦИЯ ---
-supabase.auth.onAuthStateChange(async (event, session) => {
-    if (session) { currentUserId = session.user.id; await updateProfileUI(); } 
-    else { currentUserId = null; currentUserProfile = null; isAdmin = false; await updateProfileUI(); }
-});
-
+supabase.auth.onAuthStateChange(async (event, session) => { if (session) { currentUserId = session.user.id; await updateProfileUI(); } else { currentUserId = null; currentUserProfile = null; isAdmin = false; await updateProfileUI(); } });
 window.openLoginModal = () => document.getElementById('login-modal').classList.remove('hidden');
 window.closeLoginModal = () => document.getElementById('login-modal').classList.add('hidden');
-
 window.handleLogin = async function() {
     const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value;
     if(!email || !password) return showToast("Введи email и пароль!", "error");
@@ -130,13 +112,8 @@ window.handleLogin = async function() {
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
-        else { 
-            showToast('Аккаунт создан!', 'success'); 
-            await supabase.from('profiles').insert({ id: signUpData.user.id, username: 'User_' + signUpData.user.id.substring(0, 4), email: email });
-            closeLoginModal(); 
-        }
-    } else if (error) { showToast('Ошибка: ' + error.message, 'error'); } 
-    else { showToast('Успешный вход!', 'success'); closeLoginModal(); }
+        else { showToast('Аккаунт создан!', 'success'); await supabase.from('profiles').insert({ id: signUpData.user.id, username: 'User_' + signUpData.user.id.substring(0, 4), email: email }); closeLoginModal(); }
+    } else if (error) { showToast('Ошибка: ' + error.message, 'error'); } else { showToast('Успешный вход!', 'success'); closeLoginModal(); }
 }
 window.logout = async function() { await supabase.auth.signOut(); showToast('Вы вышли', 'success'); }
 
@@ -145,24 +122,34 @@ window.showConfirm = function(text, callback) { document.getElementById('confirm
 window.closeConfirmModal = function() { document.getElementById('confirm-modal').classList.add('hidden'); confirmCallback = null; }
 window.executeConfirm = async function() { if (confirmCallback) await confirmCallback(); closeConfirmModal(); }
 
-// --- ПЛЕЕР (Сокращенно для читаемости, логика та же) ---
-window.playTrack = function(trackId) {
+// --- ПЛЕЕР ---
+window.playTrack = function(trackId, startTime = 0, playImmediately = true) {
     const track = allTracksData.find(t => t.id === trackId); if (!track) return;
-    if (currentTrackId === trackId) { toggleGlobalPlay(); return; }
-    currentTrackId = trackId; globalAudio.src = track.audio_url; globalAudio.play();
+    if (currentTrackId === trackId && playImmediately) { toggleGlobalPlay(); return; }
+    
+    currentTrackId = trackId; globalAudio.src = track.audio_url; 
+    if (playImmediately) globalAudio.play(); else globalAudio.pause();
+
     document.getElementById('global-player').classList.remove('hidden');
     document.getElementById('player-title').innerText = track.title; document.getElementById('player-artist').innerText = track.artist || 'TrueEstimation';
     const coverImg = document.getElementById('player-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; }
-    updateAllPlayIcons(); updateGlobalPlayPauseIcon(true);
+    
+    if (startTime > 0) {
+        globalAudio.addEventListener('loadedmetadata', () => {
+            globalAudio.currentTime = startTime;
+        }, { once: true });
+    }
+
+    updateAllPlayIcons(); updateGlobalPlayPauseIcon(playImmediately);
 }
+
 window.toggleGlobalPlay = function() { if (!currentTrackId) return; if (globalAudio.paused) { globalAudio.play(); updateGlobalPlayPauseIcon(true); } else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); } updateAllPlayIcons(); }
-window.playNext = function() { /* логика та же */ if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let nextIndex; if (isShuffle) { nextIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); nextIndex = currentIndex + 1; if (nextIndex >= allTracksData.length) { if (repeatMode === 1) nextIndex = 0; else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); updateAllPlayIcons(); return; } } } playTrack(allTracksData[nextIndex].id); }
-window.playPrev = function() { /* логика та же */ if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let prevIndex; if (isShuffle) { prevIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); prevIndex = currentIndex - 1; if (prevIndex < 0) { if (repeatMode === 1) prevIndex = allTracksData.length - 1; else prevIndex = 0; } } playTrack(allTracksData[prevIndex].id); }
+window.playNext = function() { /* ... */ if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let nextIndex; if (isShuffle) { nextIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); nextIndex = currentIndex + 1; if (nextIndex >= allTracksData.length) { if (repeatMode === 1) nextIndex = 0; else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); updateAllPlayIcons(); return; } } } playTrack(allTracksData[nextIndex].id); }
+window.playPrev = function() { /* ... */ if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let prevIndex; if (isShuffle) { prevIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); prevIndex = currentIndex - 1; if (prevIndex < 0) { if (repeatMode === 1) prevIndex = allTracksData.length - 1; else prevIndex = 0; } } playTrack(allTracksData[prevIndex].id); }
 window.toggleShuffle = function() { isShuffle = !isShuffle; const btn = document.getElementById('shuffle-btn'); if (isShuffle) { btn.classList.add('text-green-500'); btn.classList.remove('text-gray-400'); } else { btn.classList.remove('text-green-500'); btn.classList.add('text-gray-400'); } }
 window.toggleRepeat = function() { repeatMode = (repeatMode + 1) % 3; const btn = document.getElementById('repeat-btn'); const badge = document.getElementById('repeat-badge'); btn.classList.remove('text-green-500', 'text-gray-400'); badge.classList.add('hidden'); if (repeatMode === 0) btn.classList.add('text-gray-400'); else if (repeatMode === 1) btn.classList.add('text-green-500'); else if (repeatMode === 2) { btn.classList.add('text-green-500'); badge.classList.remove('hidden'); } }
 window.openCoverModal = function() { if (!currentTrackId) return; const track = allTracksData.find(t => t.id === currentTrackId); if (!track || !track.cover_url) return; document.getElementById('cover-modal-img').src = track.cover_url; document.getElementById('cover-modal').classList.remove('hidden'); }
 window.closeCoverModal = () => document.getElementById('cover-modal').classList.add('hidden');
-
 function updateAllPlayIcons() { document.querySelectorAll('.card-play-icon').forEach(icon => { icon.innerHTML = `<path class="ml-0.5" d="M8 5v14l11-7z"/>`; }); if (currentTrackId && !globalAudio.paused) { document.querySelectorAll(`.card-icon-${currentTrackId}`).forEach(icon => { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; }); } }
 function updateGlobalPlayPauseIcon(isPlaying) { const icon = document.getElementById('global-play-icon'); if (isPlaying) { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; icon.classList.remove('ml-0.5'); } else { icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; icon.classList.add('ml-0.5'); } }
 
@@ -175,11 +162,25 @@ globalAudio.addEventListener('loadedmetadata', () => { document.getElementById('
 globalAudio.addEventListener('ended', () => { if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); } else { playNext(); } });
 
 window.seekGlobalAudio = function(value) { globalAudio.currentTime = value; if (globalAudio.duration) { const percent = value / globalAudio.duration; document.getElementById('global-progress-bar').style.width = `${percent * 100}%`; updateThumbPosition('progress', percent); } }
-window.changeVolume = function(value) { globalAudio.volume = value; previousVolume = value; document.getElementById('volume-progress-bar').style.width = `${value * 100}%`; document.getElementById('global-volume-slider').value = value; updateThumbPosition('volume', value); const icon = document.getElementById('volume-icon'); if(value == 0) icon.innerHTML = `<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`; else if(value < 0.5) icon.innerHTML = `<path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>`; else icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>`; }
-window.toggleMute = function() { if (globalAudio.volume > 0) { previousVolume = globalAudio.volume; changeVolume(0); } else { changeVolume(previousVolume || 1); } }
 
-// --- ОЦЕНКА ---
-window.openRatingModal = function(trackId) { const track = allTracksData.find(t => t.id === trackId); if (!track) return; ratingTrackId = trackId; document.getElementById('modal-track-title').innerText = track.title; document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation'; const coverImg = document.getElementById('modal-track-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; } currentUserRating = track.userRating; const deleteBtn = document.getElementById('delete-rating-btn'); if (currentUserRating) { for(let i=1; i<=5; i++) document.getElementById(`crit-${i}`).value = 3; document.getElementById('rating-comment').value = currentUserRating.comment || ''; deleteBtn.classList.remove('hidden'); } else { for(let i=1; i<=5; i++) { document.getElementById(`crit-${i}`).value = 3; document.getElementById(`val-crit-${i}`).innerText = '3 / 6'; } document.getElementById('rating-comment').value = ''; deleteBtn.classList.add('hidden'); } updateTotalScore(); document.getElementById('rating-modal').classList.remove('hidden'); }
+// ИСПРАВЛЕННЫЙ БАГ С ГРОМКОСТЬЮ
+window.changeVolume = function(value) {
+    value = parseFloat(value);
+    globalAudio.volume = value;
+    if (value > 0) previousVolume = value; // Запоминаем, только если громкость больше 0
+    localStorage.setItem('te_volume', value); // Сохраняем в память браузера
+    document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
+    document.getElementById('global-volume-slider').value = value;
+    updateThumbPosition('volume', value);
+    const icon = document.getElementById('volume-icon');
+    if(value == 0) icon.innerHTML = `<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`;
+    else if(value < 0.5) icon.innerHTML = `<path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>`;
+    else icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>`;
+}
+window.toggleMute = function() { if (globalAudio.volume > 0) { changeVolume(0); } else { changeVolume(previousVolume || 0.5); } }
+
+// --- ОЦЕНКА И КОММЕНТАРИИ ---
+window.openRatingModal = function(trackId) { /* ... */ const track = allTracksData.find(t => t.id === trackId); if (!track) return; ratingTrackId = trackId; document.getElementById('modal-track-title').innerText = track.title; document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation'; const coverImg = document.getElementById('modal-track-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; } currentUserRating = track.userRating; const deleteBtn = document.getElementById('delete-rating-btn'); if (currentUserRating) { for(let i=1; i<=5; i++) document.getElementById(`crit-${i}`).value = 3; document.getElementById('rating-comment').value = currentUserRating.comment || ''; deleteBtn.classList.remove('hidden'); } else { for(let i=1; i<=5; i++) { document.getElementById(`crit-${i}`).value = 3; document.getElementById(`val-crit-${i}`).innerText = '3 / 6'; } document.getElementById('rating-comment').value = ''; deleteBtn.classList.add('hidden'); } updateTotalScore(); document.getElementById('rating-modal').classList.remove('hidden'); }
 window.closeRatingModal = function() { document.getElementById('rating-modal').classList.add('hidden'); ratingTrackId = null; currentUserRating = null; }
 window.updateTotalScore = function() { let total = 0; for(let i=1; i<=5; i++) { const val = parseInt(document.getElementById(`crit-${i}`).value); document.getElementById(`val-crit-${i}`).innerText = `${val} / 6`; total += val; } document.getElementById('modal-total-score').innerText = total; }
 window.submitRating = async function() { if (!ratingTrackId) return; const { data: { session } } = await supabase.auth.getSession(); if (!session) { showToast('Сначала войди!', 'error'); closeRatingModal(); return; } let totalScore = 0; for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value); const commentText = document.getElementById('rating-comment').value.trim(); const { error } = await supabase.from('ratings').upsert({ user_id: session.user.id, track_id: ratingTrackId, score: totalScore, comment: commentText || null }, { onConflict: 'user_id, track_id' }); if (error) showToast('Ошибка: ' + error.message, 'error'); else { showToast('Оценка сохранена!', 'success'); closeRatingModal(); await loadData(); } }
@@ -241,12 +242,30 @@ async function loadData() {
 
     document.getElementById('stats-container').innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
     renderCategories(); renderView(); 
+
+    // ВОССТАНОВЛЕНИЕ ТРЕКА ИЗ ПАМЯТИ
+    const savedTrackId = localStorage.getItem('te_trackId');
+    const savedTime = parseFloat(localStorage.getItem('te_currentTime'));
+    if (savedTrackId && !currentTrackId) {
+        const savedTrack = allTracksData.find(t => t.id == savedTrackId);
+        if (savedTrack) {
+            playTrack(savedTrack.id, savedTime || 0, false); // false = не включать автовоспроизведение
+            // Обновляем ползунок прогресса под сохраненное время
+            setTimeout(() => {
+                if (savedTime) {
+                    document.getElementById('global-progress-bar').style.width = `${(savedTime / globalAudio.duration) * 100}%`;
+                    document.getElementById('global-slider').value = savedTime;
+                    document.getElementById('global-current-time').innerText = formatTime(savedTime);
+                    updateThumbPosition('progress', savedTime / globalAudio.duration);
+                }
+            }, 500);
+        }
+    }
 }
 
-// --- РЕНДЕР КАТЕГОРИЙ ---
+// --- РЕНДЕР ---
 function renderCategories() {
     const container = document.getElementById('categories-container');
-    // ФИЛЬТР: Убираем "Треки", "Все" и пустые
     const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все' && c.toLowerCase() !== 'треки')));
     
     document.getElementById('nav-main').className = currentCategory === 'Главное меню' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
@@ -271,14 +290,11 @@ function renderView() {
     const heroContainer = document.getElementById('hero-container'); const listViewContainer = document.getElementById('list-view-container');
     const commentsViewContainer = document.getElementById('comments-view-container'); const adminViewContainer = document.getElementById('admin-view-container');
     
-    // Скрываем все
     heroContainer.classList.add('hidden'); listViewContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); adminViewContainer.classList.add('hidden');
 
-    if (currentCategory === 'Главное меню') {
-        heroContainer.classList.remove('hidden'); renderHero();
-    } else if (currentCategory === 'Комментарии') {
-        commentsViewContainer.classList.remove('hidden'); renderCommentsView();
-    } else if (currentCategory === 'AdminPanel') {
+    if (currentCategory === 'Главное меню') { heroContainer.classList.remove('hidden'); renderHero(); } 
+    else if (currentCategory === 'Комментарии') { commentsViewContainer.classList.remove('hidden'); renderCommentsView(); } 
+    else if (currentCategory === 'AdminPanel') {
         if (!isAdmin) { changeCategory('Главное меню'); return; }
         adminViewContainer.classList.remove('hidden'); renderAdminPanel();
     } else {
@@ -312,42 +328,27 @@ function renderTracksList() {
 }
 
 function renderAdminPanel() {
-    const tbody = document.getElementById('admin-users-list');
-    // Показываем всех пользователей, у которых есть профиль
-    const users = allProfilesData.filter(p => p.email); 
-    
-    if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Пользователи не найдены</td></tr>`;
-        return;
-    }
-
+    const tbody = document.getElementById('admin-users-list'); const users = allProfilesData.filter(p => p.email); 
+    if (users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Пользователи не найдены</td></tr>`; return; }
     tbody.innerHTML = users.map(u => {
         const isTargetAdmin = u.is_admin;
-        const actionBtn = isTargetAdmin 
-            ? `<button onclick="toggleAdminStatus('${u.id}', true)" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять права</button>`
-            : `<button onclick="toggleAdminStatus('${u.id}', false)" class="bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать админку</button>`;
-
-        return `
-            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td class="p-4 flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
-                        ${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(u.username.charAt(0).toUpperCase())}</span>`}
-                    </div>
-                    <span class="font-bold text-sm ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span>
-                </td>
-                <td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td>
-                <td class="p-4 text-sm">
-                    ${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Пользователь</span>'}
-                </td>
-                <td class="p-4 text-right">${actionBtn}</td>
-            </tr>
-        `;
+        const actionBtn = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true)" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять права</button>` : `<button onclick="toggleAdminStatus('${u.id}', false)" class="bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать админку</button>`;
+        return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors"><td class="p-4 flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">${u.avatar_url ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(u.username.charAt(0).toUpperCase())}</span>`}</div><span class="font-bold text-sm ${isTargetAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(u.username)}</span></td><td class="p-4 text-sm text-gray-400">${escapeHtml(u.email)}</td><td class="p-4 text-sm">${isTargetAdmin ? '<span class="text-red-500 font-bold">Админ</span>' : '<span class="text-gray-500">Пользователь</span>'}</td><td class="p-4 text-right">${actionBtn}</td></tr>`;
     }).join('');
 }
 
 function renderCommentsView() {
     const container = document.getElementById('comments-list');
-    if (allCommentsData.length === 0) { container.innerHTML = `<div class="text-gray-400 text-center py-10 bg-white/5 rounded-2xl border border-white/10">Пока нет комментариев.</div>`; return; }
+    // НОВЫЙ КРАСИВЫЙ ПУСТОЙ БЛОК
+    if (allCommentsData.length === 0) { 
+        container.innerHTML = `
+            <div class="relative overflow-hidden bg-gradient-to-br from-green-900/30 to-gray-900/60 rounded-3xl border border-green-500/20 p-12 text-center shadow-[0_0_30px_rgba(34,197,94,0.1)] w-full max-w-2xl">
+                <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-green-500/10 rounded-full blur-3xl"></div>
+                <p class="relative z-10 text-lg font-medium text-gray-300">Пока нет комментариев. Стань первым, кто оставит впечатление о треке!</p>
+            </div>
+        `; 
+        return; 
+    }
 
     const sortedComments = [...allCommentsData].sort((a, b) => { if (currentCommentsSort === 'newest') return new Date(b.created_at) - new Date(a.created_at); if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount; return new Date(b.created_at) - new Date(a.created_at); });
 
@@ -355,8 +356,6 @@ function renderCommentsView() {
         const dateStr = new Date(comment.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
         const heartIcon = comment.userLiked ? `<svg class="w-5 h-5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
         const deleteBtn = comment.isOwn ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
-        
-        // Бейджик админа для автора коммента
         const authorAdminBadge = comment.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
         
         const repliesHtml = comment.replies.map(rep => {
@@ -364,7 +363,6 @@ function renderCommentsView() {
             const repDeleteBtn = rep.isOwn ? `<button onclick="deleteReply(${rep.id})" class="text-gray-500 hover:text-red-400 ml-2 transition-colors" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             const repHeart = rep.userLiked ? `<svg class="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 text-gray-500 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const repAdminBadge = rep.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
-            
             return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden">${rep.avatar_url ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span class="text-xs font-bold ${rep.isAdmin ? 'text-red-400' : 'text-green-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
         }).join('');
 
