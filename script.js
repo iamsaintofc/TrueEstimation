@@ -10,8 +10,6 @@ const translations = {
     en: { main: 'Home', all: 'All Tracks', comments: 'Comments', admin: 'Admin Panel', playlists: 'Playlists', liked: 'Liked', settings: 'Settings', logout: 'Logout', search: 'Search...', addTrack: 'Add Track', title: 'Title', artist: 'Artist', category: 'Category', audioUrl: 'Audio URL', coverUrl: 'Cover URL', emptyComments: 'No comments yet. Be the first!', add: 'Add', close: 'Close', newPlaylist: 'New Playlist', plName: 'Playlist name', cancel: 'Cancel', create: 'Create' }
 };
 let currentLang = localStorage.getItem('te_lang') || 'ru';
-
-// 20 КРУТЫХ ЭМОДЗИ ДЛЯ АВАТАРОК
 const presetAvatars = ['😎','🔥','🎧','🎵','🚀','👾','🐉','🍕','👑','😈','🤖','🦊','🐼','🦁','🍀','🌙','⚡','💎','🎸','🎹'];
 
 const globalAudio = new Audio();
@@ -20,8 +18,7 @@ let currentCategory = 'Главное меню'; let ratingTrackId = null; let c
 let previousVolume = 1; let currentUserId = null; let currentUserProfile = null; let isAdmin = false;
 let isShuffle = false; let repeatMode = 0; let currentSort = 'rating'; let currentCommentsSort = 'likes'; 
 let confirmCallback = null; let searchQuery = '';
-let userPlaylists = []; let currentPlaylistId = null; let currentTrackToAddToPlaylist = null;
-let allPlaylistTracksData = [];
+let userPlaylists = []; let currentTrackToAddToPlaylist = null; let allPlaylistTracksData = [];
 let selectedEmojiAvatar = null;
 
 function escapeHtml(str) { if (str === null || str === undefined) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -38,22 +35,22 @@ function showToast(message, type = 'success') {
 function formatTime(seconds) { if (isNaN(seconds)) return "0:00"; const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60); return `${mins}:${secs < 10 ? '0' : ''}${secs}`; }
 window.toggleMobileMenu = () => document.getElementById('sidebar').classList.toggle('open');
 
-// --- ШАРИНГ ---
+// --- ШАРИНГ ТРЕКОВ И ПЛЕЙЛИСТОВ ---
 window.shareTrack = function(trackId, event) {
     event.stopPropagation();
     const url = `${window.location.origin}${window.location.pathname}?track=${trackId}`;
-    navigator.clipboard.writeText(url).then(() => {
-        showToast(currentLang === 'ru' ? 'Ссылка на трек скопирована!' : 'Track link copied!', 'success');
-    }).catch(() => {
-        showToast('Ошибка копирования', 'error');
-    });
+    navigator.clipboard.writeText(url).then(() => showToast(currentLang === 'ru' ? 'Ссылка на трек скопирована!' : 'Track link copied!', 'success'));
+}
+window.shareCurrentPlaylist = function() {
+    if (!currentCategory.startsWith('Playlist_')) return;
+    const plId = currentCategory.split('_')[1];
+    const url = `${window.location.origin}${window.location.pathname}?playlist=${plId}`;
+    navigator.clipboard.writeText(url).then(() => showToast(currentLang === 'ru' ? 'Ссылка на плейлист скопирована!' : 'Playlist link copied!', 'success'));
 }
 
 // --- ЯЗЫКИ ---
 window.changeLanguage = function(lang) {
-    currentLang = lang;
-    localStorage.setItem('te_lang', lang);
-    applyLanguage();
+    currentLang = lang; localStorage.setItem('te_lang', lang); applyLanguage();
     showToast(lang === 'ru' ? 'Язык изменен' : 'Language changed', 'success');
 }
 function applyLanguage() {
@@ -64,20 +61,15 @@ function applyLanguage() {
     document.getElementById('nav-admin').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>${t.admin}`;
     document.getElementById('nav-liked').innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>${t.liked}`;
     document.getElementById('search-input').placeholder = t.search;
-    const langSelect = document.getElementById('settings-language');
-    if(langSelect) langSelect.value = currentLang;
-    const addFormTitle = document.querySelector('#admin-view-container h3');
-    if(addFormTitle) addFormTitle.innerText = t.addTrack;
+    const langSelect = document.getElementById('settings-language'); if(langSelect) langSelect.value = currentLang;
+    const addFormTitle = document.querySelector('#admin-view-container h3'); if(addFormTitle) addFormTitle.innerText = t.addTrack;
     const inputs = ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover'];
     const placeholders = [t.title, t.artist, t.category, t.audioUrl, t.coverUrl];
     inputs.forEach((id, i) => { const el = document.getElementById(id); if(el) el.placeholder = placeholders[i]; });
-    const plModalTitle = document.querySelector('#create-playlist-modal h3');
-    if(plModalTitle) plModalTitle.innerText = t.newPlaylist;
-    const plModalInput = document.getElementById('new-playlist-name');
-    if(plModalInput) plModalInput.placeholder = t.plName;
+    const plModalTitle = document.querySelector('#create-playlist-modal h3'); if(plModalTitle) plModalTitle.innerText = t.newPlaylist;
+    const plModalInput = document.getElementById('new-playlist-name'); if(plModalInput) plModalInput.placeholder = t.plName;
     renderCategories(); renderView();
 }
-
 window.handleSearch = function(val) { searchQuery = val.toLowerCase().trim(); renderView(); }
 
 // --- ПРОФИЛИ ---
@@ -98,7 +90,6 @@ async function updateProfileUI() {
     const avatarImg = document.getElementById('user-avatar-img'); const avatarLetter = document.getElementById('user-avatar-letter');
     const headerBtn = document.getElementById('header-avatar-btn'); const adminBadge = document.getElementById('admin-badge-header'); const navAdmin = document.getElementById('nav-admin');
     
-    // Рендер аватарки (URL или Эмодзи)
     const isUrl = currentUserProfile.avatar_url && currentUserProfile.avatar_url.startsWith('http');
     if (isUrl) {
         avatarImg.src = currentUserProfile.avatar_url; avatarImg.classList.remove('hidden'); avatarLetter.classList.add('hidden');
@@ -110,49 +101,36 @@ async function updateProfileUI() {
     
     if (isAdmin) { headerBtn.classList.add('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.remove('hidden'); navAdmin.classList.remove('hidden'); } 
     else { headerBtn.classList.remove('ring-2', 'ring-red-500', 'shadow-[0_0_15px_rgba(239,68,68,0.5)]'); adminBadge.classList.add('hidden'); navAdmin.classList.add('hidden'); }
-    
     updateProfilePreview();
 }
 
 function updateProfilePreview() {
-    const previewImg = document.getElementById('settings-avatar-preview'); 
-    const previewLetter = document.getElementById('settings-avatar-letter');
-    const previewEmoji = document.getElementById('settings-avatar-emoji');
-    
+    const previewImg = document.getElementById('settings-avatar-preview'); const previewLetter = document.getElementById('settings-avatar-letter'); const previewEmoji = document.getElementById('settings-avatar-emoji');
     let currentAvatar = selectedEmojiAvatar || currentUserProfile?.avatar_url;
     
     if (currentAvatar && currentAvatar.startsWith('http')) {
-        previewImg.src = currentAvatar; previewImg.classList.remove('hidden');
-        previewLetter.classList.add('hidden'); previewEmoji.classList.add('hidden');
+        previewImg.src = currentAvatar; previewImg.classList.remove('hidden'); previewLetter.classList.add('hidden'); previewEmoji.classList.add('hidden');
     } else if (currentAvatar) {
-        previewImg.classList.add('hidden'); previewLetter.classList.add('hidden');
-        previewEmoji.innerText = currentAvatar; previewEmoji.classList.remove('hidden');
+        previewImg.classList.add('hidden'); previewLetter.classList.add('hidden'); previewEmoji.innerText = currentAvatar; previewEmoji.classList.remove('hidden');
     } else {
-        previewImg.classList.add('hidden'); previewEmoji.classList.add('hidden');
-        previewLetter.innerText = currentUserProfile ? currentUserProfile.username.charAt(0).toUpperCase() : 'U';
-        previewLetter.classList.remove('hidden');
+        previewImg.classList.add('hidden'); previewEmoji.classList.add('hidden'); previewLetter.innerText = currentUserProfile ? currentUserProfile.username.charAt(0).toUpperCase() : 'U'; previewLetter.classList.remove('hidden');
     }
 }
 
 window.openProfileModal = function() { 
-    if (!currentUserProfile) return; 
+    if (!currentUserProfile) return showToast('Сначала войдите в аккаунт', 'error'); 
     selectedEmojiAvatar = null;
     document.getElementById('settings-username').value = currentUserProfile.username; 
-    
-    // Рендер эмодзи-пикера
     document.getElementById('emoji-avatar-picker').innerHTML = presetAvatars.map(emoji => 
         `<button onclick="setEmojiAvatar('${emoji}')" class="text-2xl hover:scale-125 hover:bg-white/10 rounded-lg p-1 transition-all ${currentUserProfile.avatar_url === emoji ? 'bg-green-500/20 neon-border' : ''}">${emoji}</button>`
     ).join('');
-
     updateProfilePreview();
     document.getElementById('profile-modal').classList.remove('hidden'); 
 }
 window.closeProfileModal = () => document.getElementById('profile-modal').classList.add('hidden');
 
 window.setEmojiAvatar = function(emoji) {
-    selectedEmojiAvatar = emoji;
-    updateProfilePreview();
-    // Обновляем подсветку в пикере
+    selectedEmojiAvatar = emoji; updateProfilePreview();
     document.querySelectorAll('#emoji-avatar-picker button').forEach(btn => {
         btn.className = btn.innerText === emoji 
             ? 'text-2xl hover:scale-125 hover:bg-white/10 rounded-lg p-1 transition-all bg-green-500/20 neon-border' 
@@ -163,11 +141,9 @@ window.setEmojiAvatar = function(emoji) {
 window.saveProfile = async function() {
     const newUsername = document.getElementById('settings-username').value.trim(); 
     if (!newUsername) return showToast('Никнейм не может быть пустым', 'error');
-    
     const fileInput = document.getElementById('settings-avatar-file');
     let avatarUrl = selectedEmojiAvatar || currentUserProfile.avatar_url;
     
-    // Если выбран файл, загружаем его
     if (fileInput.files.length > 0) {
         const file = fileInput.files[0]; const fileExt = file.name.split('.').pop(); const fileName = `${currentUserId}-${Date.now()}.${fileExt}`;
         showToast('Загрузка аватарки...', 'success');
@@ -178,38 +154,40 @@ window.saveProfile = async function() {
     }
 
     const { error } = await supabase.from('profiles').upsert({ id: currentUserId, username: newUsername, avatar_url: avatarUrl, language: currentLang });
-    
     if (error) {
-        // Отлавливаем ошибку уникальности никнейма
         if (error.code === '23505') showToast('Этот никнейм уже занят!', 'error');
         else showToast('Ошибка: ' + error.message, 'error');
-    } else { 
-        showToast('Профиль обновлён!', 'success'); 
-        closeProfileModal(); 
-        await updateProfileUI(); 
-        await loadData(); 
-    }
+    } else { showToast('Профиль обновлён!', 'success'); closeProfileModal(); await updateProfileUI(); await loadData(); }
 }
 
 // --- АВТОРИЗАЦИЯ ---
 supabase.auth.onAuthStateChange(async (event, session) => { if (session) { currentUserId = session.user.id; await updateProfileUI(); } else { currentUserId = null; currentUserProfile = null; isAdmin = false; await updateProfileUI(); } });
 window.openLoginModal = () => document.getElementById('login-modal').classList.remove('hidden');
 window.closeLoginModal = () => document.getElementById('login-modal').classList.add('hidden');
+
 window.handleLogin = async function() {
     const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value;
     if(!email || !password) return showToast("Введи email и пароль!", "error");
+    
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
         else { showToast('Аккаунт создан!', 'success'); closeLoginModal(); }
-    } else if (error) { showToast('Ошибка: ' + error.message, 'error'); } else { showToast('Успешный вход!', 'success'); closeLoginModal(); }
+    } else if (error) { 
+        showToast('Ошибка: ' + error.message, 'error'); 
+    } else { 
+        showToast('Успешный вход!', 'success'); 
+        closeLoginModal(); // ЖЕСТКО ЗАКРЫВАЕМ ОКНО
+    }
 }
+
 window.handlePasswordReset = async function() {
     const email = document.getElementById('login-email').value;
     if (!email) return showToast('Введи email для сброса!', 'error');
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
-    if (error) showToast('Ошибка: ' + error.message, 'error'); else showToast('Инструкция по сбросу отправлена на почту!', 'success');
+    if (error) showToast('Ошибка: ' + error.message, 'error'); else showToast('Инструкция отправлена на почту!', 'success');
 }
 window.logout = async function() { await supabase.auth.signOut(); showToast('Вы вышли', 'success'); }
 window.showConfirm = function(text, callback) { document.getElementById('confirm-text').innerText = text; confirmCallback = callback; document.getElementById('confirm-modal').classList.remove('hidden'); }
@@ -284,7 +262,13 @@ window.playTrack = function(trackId, startTime = 0, playImmediately = true) {
     if (startTime > 0) { globalAudio.addEventListener('loadedmetadata', () => { globalAudio.currentTime = startTime; }, { once: true }); }
     updateAllPlayIcons(); updateGlobalPlayPauseIcon(playImmediately);
 }
-window.toggleGlobalPlay = function() { if (!currentTrackId) return; if (globalAudio.paused) { globalAudio.play(); updateGlobalPlayPauseIcon(true); } else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); } updateAllPlayIcons(); }
+window.toggleGlobalPlay = function() { 
+    if (!currentTrackId) return; 
+    if (globalAudio.paused) { globalAudio.play(); updateGlobalPlayPauseIcon(true); } 
+    else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); } 
+    updateAllPlayIcons(); 
+    updateVolumeUI(); // Обновляем иконку громкости
+}
 window.playNext = function() { if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let nextIndex; if (isShuffle) { nextIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); nextIndex = currentIndex + 1; if (nextIndex >= allTracksData.length) { if (repeatMode === 1) nextIndex = 0; else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); updateAllPlayIcons(); return; } } } playTrack(allTracksData[nextIndex].id); }
 window.playPrev = function() { if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let prevIndex; if (isShuffle) { prevIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); prevIndex = currentIndex - 1; if (prevIndex < 0) { if (repeatMode === 1) prevIndex = allTracksData.length - 1; else prevIndex = 0; } } playTrack(allTracksData[prevIndex].id); }
 window.toggleShuffle = function() { isShuffle = !isShuffle; const btn = document.getElementById('shuffle-btn'); if (isShuffle) { btn.classList.add('text-green-500'); btn.classList.remove('text-gray-400'); } else { btn.classList.remove('text-green-500'); btn.classList.add('text-gray-400'); } }
@@ -292,7 +276,13 @@ window.toggleRepeat = function() { repeatMode = (repeatMode + 1) % 3; const btn 
 window.openCoverModal = function() { if (!currentTrackId) return; const track = allTracksData.find(t => t.id === currentTrackId); if (!track || !track.cover_url) return; document.getElementById('cover-modal-img').src = track.cover_url; document.getElementById('cover-modal').classList.remove('hidden'); }
 window.closeCoverModal = () => document.getElementById('cover-modal').classList.add('hidden');
 function updateAllPlayIcons() { document.querySelectorAll('.card-play-icon').forEach(icon => { icon.innerHTML = `<path class="ml-0.5" d="M8 5v14l11-7z"/>`; }); if (currentTrackId && !globalAudio.paused) { document.querySelectorAll(`.card-icon-${currentTrackId}`).forEach(icon => { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; }); } }
-function updateGlobalPlayPauseIcon(isPlaying) { const icon = document.getElementById('global-play-icon'); if (isPlaying) { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; icon.classList.remove('ml-0.5'); } else { icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; icon.classList.add('ml-0.5'); } }
+function updateGlobalPlayPauseIcon(isPlaying) { 
+    const icon = document.getElementById('global-play-icon'); 
+    if (isPlaying) { icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`; icon.classList.remove('ml-0.5'); } 
+    else { icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; icon.classList.add('ml-0.5'); } 
+    // Пауза/плей для эквалайзера громкости
+    document.querySelectorAll('#volume-eq .eq-bar').forEach(bar => isPlaying ? bar.classList.remove('paused') : bar.classList.add('paused'));
+}
 document.getElementById('progress-container').addEventListener('mousedown', function(e) { if (e.target.tagName.toLowerCase() === 'input') return; const rect = this.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)); if (globalAudio.duration) { const newTime = percent * globalAudio.duration; globalAudio.currentTime = newTime; document.getElementById('global-progress-bar').style.width = `${percent * 100}%`; document.getElementById('global-slider').value = newTime; document.getElementById('global-current-time').innerText = formatTime(newTime); updateThumbPosition('progress', percent); } });
 document.getElementById('volume-container').addEventListener('mousedown', function(e) { if (e.target.tagName.toLowerCase() === 'input') return; const rect = this.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)); changeVolume(percent); updateThumbPosition('volume', percent); });
 function updateThumbPosition(type, percent) { const thumb = document.getElementById(`${type}-thumb`); if (thumb) { thumb.style.left = `${percent * 100}%`; if (type === 'volume' && percent === 0) thumb.style.opacity = '0'; else if (percent > 0) thumb.style.opacity = '1'; } }
@@ -300,11 +290,36 @@ globalAudio.addEventListener('timeupdate', () => { if (!globalAudio.duration) re
 globalAudio.addEventListener('loadedmetadata', () => { document.getElementById('global-duration').innerText = formatTime(globalAudio.duration); document.getElementById('global-slider').max = globalAudio.duration; });
 globalAudio.addEventListener('ended', () => { if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); } else { playNext(); } });
 window.seekGlobalAudio = function(value) { globalAudio.currentTime = value; if (globalAudio.duration) { const percent = value / globalAudio.duration; document.getElementById('global-progress-bar').style.width = `${percent * 100}%`; updateThumbPosition('progress', percent); } }
-window.changeVolume = function(value) { value = parseFloat(value); globalAudio.volume = value; if (value > 0) previousVolume = value; localStorage.setItem('te_volume', value); document.getElementById('volume-progress-bar').style.width = `${value * 100}%`; document.getElementById('global-volume-slider').value = value; updateThumbPosition('volume', value); const icon = document.getElementById('volume-icon'); if(value == 0) icon.innerHTML = `<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`; else if(value < 0.5) icon.innerHTML = `<path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>`; else icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>`; }
+
+function updateVolumeUI() {
+    const eq = document.getElementById('volume-eq'); const muteIcon = document.getElementById('volume-mute-icon');
+    if (globalAudio.volume === 0 || globalAudio.muted) {
+        eq.classList.add('hidden'); muteIcon.classList.remove('hidden');
+    } else {
+        eq.classList.remove('hidden'); muteIcon.classList.add('hidden');
+    }
+}
+
+window.changeVolume = function(value) { 
+    value = parseFloat(value); globalAudio.volume = value; 
+    if (value > 0) previousVolume = value; 
+    localStorage.setItem('te_volume', value); 
+    document.getElementById('volume-progress-bar').style.width = `${value * 100}%`; 
+    document.getElementById('global-volume-slider').value = value; 
+    updateThumbPosition('volume', value); 
+    updateVolumeUI();
+}
 window.toggleMute = function() { if (globalAudio.volume > 0) { changeVolume(0); } else { changeVolume(previousVolume || 0.5); } }
-const savedVol = parseFloat(localStorage.getItem('te_volume')); if (!isNaN(savedVol)) { globalAudio.volume = savedVol; previousVolume = savedVol > 0 ? savedVol : 1; document.getElementById('global-volume-slider').value = savedVol; document.getElementById('volume-progress-bar').style.width = `${savedVol * 100}%`; setTimeout(() => changeVolume(savedVol), 100); }
+const savedVol = parseFloat(localStorage.getItem('te_volume')); 
+if (!isNaN(savedVol)) { 
+    globalAudio.volume = savedVol; previousVolume = savedVol > 0 ? savedVol : 1; 
+    document.getElementById('global-volume-slider').value = savedVol; 
+    document.getElementById('volume-progress-bar').style.width = `${savedVol * 100}%`; 
+    setTimeout(() => { changeVolume(savedVol); updateVolumeUI(); }, 100); 
+}
 window.addEventListener('beforeunload', () => { if (currentTrackId) { localStorage.setItem('te_trackId', currentTrackId); localStorage.setItem('te_currentTime', globalAudio.currentTime); } });
-globalAudio.addEventListener('pause', () => { if (currentTrackId) { localStorage.setItem('te_trackId', currentTrackId); localStorage.setItem('te_currentTime', globalAudio.currentTime); } });
+globalAudio.addEventListener('pause', () => { if (currentTrackId) { localStorage.setItem('te_trackId', currentTrackId); localStorage.setItem('te_currentTime', globalAudio.currentTime); } updateVolumeUI(); });
+globalAudio.addEventListener('play', updateVolumeUI);
 
 // --- ОЦЕНКА И КОММЕНТАРИИ ---
 window.openRatingModal = function(trackId) { const track = allTracksData.find(t => t.id === trackId); if (!track) return; ratingTrackId = trackId; document.getElementById('modal-track-title').innerText = track.title; document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation'; const coverImg = document.getElementById('modal-track-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; } currentUserRating = track.userRating; const deleteBtn = document.getElementById('delete-rating-btn'); if (currentUserRating) { for(let i=1; i<=5; i++) document.getElementById(`crit-${i}`).value = 3; document.getElementById('rating-comment').value = currentUserRating.comment || ''; deleteBtn.classList.remove('hidden'); } else { for(let i=1; i<=5; i++) { document.getElementById(`crit-${i}`).value = 3; document.getElementById(`val-crit-${i}`).innerText = '3 / 6'; } document.getElementById('rating-comment').value = ''; deleteBtn.classList.add('hidden'); } updateTotalScore(); document.getElementById('rating-modal').classList.remove('hidden'); }
@@ -382,6 +397,17 @@ async function loadData() {
     applyLanguage(); 
     renderView(); 
 
+    // Обработка ссылок (Share)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedTrackId = urlParams.get('track');
+    const sharedPlaylistId = urlParams.get('playlist');
+
+    if (sharedTrackId) {
+        setTimeout(() => { const track = allTracksData.find(t => t.id == sharedTrackId); if (track) { showToast(`Загружен трек по ссылке`, 'success'); changeCategory('Все'); setTimeout(() => playTrack(track.id), 500); } }, 1000);
+    } else if (sharedPlaylistId) {
+        setTimeout(() => { const pl = userPlaylists.find(p => p.id == sharedPlaylistId); if (pl) { showToast(`Загружен плейлист по ссылке`, 'success'); changeCategory(`Playlist_${pl.id}`); } }, 1000);
+    }
+
     const savedTrackId = localStorage.getItem('te_trackId'); const savedTime = parseFloat(localStorage.getItem('te_currentTime'));
     if (savedTrackId && !currentTrackId) {
         const savedTrack = allTracksData.find(t => t.id == savedTrackId);
@@ -420,7 +446,18 @@ function renderCategories() {
     container.innerHTML = htmlParts.join('');
 }
 
-window.changeCategory = function(cat) { currentCategory = cat; if(window.innerWidth < 768) document.getElementById('sidebar').classList.remove('open'); renderCategories(); renderView(); }
+window.changeCategory = function(cat) { 
+    currentCategory = cat; 
+    if(window.innerWidth < 768) document.getElementById('sidebar').classList.remove('open'); 
+    
+    // Показ кнопки "Поделиться плейлистом"
+    const shareHeader = document.getElementById('playlist-share-header');
+    if (cat.startsWith('Playlist_')) shareHeader.classList.remove('hidden');
+    else shareHeader.classList.add('hidden');
+
+    renderCategories(); 
+    renderView(); 
+}
 
 function renderView() {
     const heroContainer = document.getElementById('hero-container'); const listViewContainer = document.getElementById('list-view-container');
@@ -466,9 +503,9 @@ function renderHero() {
             
             <div class="relative z-10 mb-8">
                 <img src="${topTrack.cover_url ? escapeHtml(topTrack.cover_url) : 'https://via.placeholder.com/500?text=No+Cover'}" class="w-48 h-48 md:w-64 md:h-64 rounded-2xl object-cover shadow-[0_0_30px_rgba(34,197,94,0.4)] border-2 border-green-500/50 group-hover:scale-[1.03] transition-transform duration-500">
-                <!-- ФИКС ЭКВАЛАЙЗЕРА (теперь аккуратно в углу) -->
+                <!-- Эквалайзер поверх обложки -->
                 <div class="absolute bottom-2 right-2 flex items-end gap-1 h-6 bg-black/80 px-2 py-1.5 rounded-lg border border-green-500/50">
-                    <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+                    <div class="eq-bar eq-anim-1"></div><div class="eq-bar eq-anim-2"></div><div class="eq-bar eq-anim-3"></div><div class="eq-bar eq-anim-4"></div>
                 </div>
             </div>
             
@@ -506,9 +543,7 @@ function renderTracksList() {
     }
     else if (currentCategory !== 'Все') filteredTracks = allTracksData.filter(t => t.category === currentCategory);
 
-    if (searchQuery) {
-        filteredTracks = filteredTracks.filter(t => t.title.toLowerCase().includes(searchQuery) || (t.artist && t.artist.toLowerCase().includes(searchQuery)));
-    }
+    if (searchQuery) { filteredTracks = filteredTracks.filter(t => t.title.toLowerCase().includes(searchQuery) || (t.artist && t.artist.toLowerCase().includes(searchQuery))); }
 
     filteredTracks.sort((a, b) => { if (currentSort === 'newest') return new Date(b.created_at) - new Date(a.created_at); if (currentSort === 'popular') return b.votesCount - a.votesCount; if (currentSort === 'likes') return b.likesCount - a.likesCount; return b.avgScore - a.avgScore; });
     if (filteredTracks.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 py-10">Ничего не найдено</p>`; return; }
@@ -525,13 +560,15 @@ function renderTracksList() {
 }
 
 function renderAdminPanel() {
-    const tbody = document.getElementById('admin-users-list'); const users = allProfilesData.filter(p => p.email); 
+    const tbody = document.getElementById('admin-users-list'); 
+    const users = allProfilesData.filter(p => p.email); // Фильтруем тех, у кого есть email
+    
     if (users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">Не найдено</td></tr>`; return; }
+    
     tbody.innerHTML = users.map(u => {
         const isTargetAdmin = u.is_admin;
         const actionBtn = isTargetAdmin ? `<button onclick="toggleAdminStatus('${u.id}', true)" class="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Снять</button>` : `<button onclick="toggleAdminStatus('${u.id}', false)" class="bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Выдать</button>`;
         
-        // Отрисовка аватарки юзера в админке (URL или Эмодзи)
         const isUrl = u.avatar_url && u.avatar_url.startsWith('http');
         const avatarHtml = isUrl ? `<img src="${escapeHtml(u.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-sm font-bold text-gray-300">${u.avatar_url || escapeHtml(u.username.charAt(0).toUpperCase())}</span>`;
 
@@ -551,11 +588,8 @@ function renderCommentsView() {
         const deleteBtn = comment.isOwn ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
         const authorAdminBadge = comment.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
         
-        // Рендер аватарки автора коммента
         const isCommentUrl = comment.avatar_url && comment.avatar_url.startsWith('http');
-        const commentAvatarHtml = isCommentUrl 
-            ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` 
-            : `<span class="text-sm md:text-lg font-bold text-gray-300">${comment.avatar_url || escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`;
+        const commentAvatarHtml = isCommentUrl ? `<img src="${escapeHtml(comment.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-sm md:text-lg font-bold text-gray-300">${comment.avatar_url || escapeHtml(comment.username.charAt(0).toUpperCase())}</span>`;
 
         const repliesHtml = comment.replies.map(rep => {
             const repDate = new Date(rep.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
@@ -563,7 +597,6 @@ function renderCommentsView() {
             const repHeart = rep.userLiked ? `<svg class="w-4 h-4 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-4 h-4 text-gray-500 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const repAdminBadge = rep.isAdmin ? `<span class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded ml-2 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">ADMIN</span>` : '';
             
-            // Аватарка автора ответа
             const isRepUrl = rep.avatar_url && rep.avatar_url.startsWith('http');
             const repAvatarHtml = isRepUrl ? `<img src="${escapeHtml(rep.avatar_url)}" class="w-full h-full object-cover">` : `<span class="text-xs font-bold text-gray-300">${rep.avatar_url || escapeHtml(rep.username.charAt(0).toUpperCase())}</span>`;
 
@@ -574,18 +607,6 @@ function renderCommentsView() {
     container.innerHTML = htmlParts.join('');
 }
 
-// Проверка ссылки на трек при загрузке (для шаринга)
-const urlParams = new URLSearchParams(window.location.search);
-const sharedTrackId = urlParams.get('track');
-if (sharedTrackId) {
-    setTimeout(() => {
-        const track = allTracksData.find(t => t.id == sharedTrackId);
-        if (track) {
-            showToast(`Загружен трек по ссылке`, 'success');
-            changeCategory('Все');
-            setTimeout(() => playTrack(track.id), 500);
-        }
-    }, 1000);
-}
-
+// Применяем начальное состояние громкости
+updateVolumeUI();
 loadData();
