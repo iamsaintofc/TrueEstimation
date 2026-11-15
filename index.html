@@ -21,11 +21,13 @@
             -webkit-appearance: none;
             width: 100%;
             background: transparent;
-            margin: 8px 0; /* Отступы сверху и снизу */
+            margin: 8px 0;
+            display: block;
         }
         input[type=range]:focus {
             outline: none;
         }
+        /* Сама полоса */
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
             height: 6px;
@@ -33,14 +35,16 @@
             background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
+        /* Кружок */
         input[type=range]::-webkit-slider-thumb {
-            height: 18px;
-            width: 18px;
+            height: 16px;
+            width: 16px;
             border-radius: 50%;
             background: #22c55e;
             cursor: pointer;
             -webkit-appearance: none;
-            margin-top: -6px; /* Точная центровка: (Высота трека 6 - Высота кружка 18) / 2 = -6 */
+            /* ИДЕАЛЬНАЯ МАТЕМАТИКА: (Высота полосы 6 - Высота кружка 16) / 2 = -5 */
+            margin-top: -5px; 
             box-shadow: 0 0 10px rgba(34,197,94,0.6);
             transition: transform 0.1s, box-shadow 0.1s;
         }
@@ -49,6 +53,7 @@
             box-shadow: 0 0 15px rgba(34,197,94,0.9);
         }
         
+        /* Стили для скроллбара */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
@@ -58,7 +63,7 @@
     
     <div class="max-w-7xl mx-auto p-4 md:p-8 flex flex-col md:flex-row gap-8">
         
-        <!-- ЛЕВОЕ МЕНЮ (Категории) -->
+        <!-- ЛЕВОЕ МЕНЮ -->
         <aside class="w-full md:w-64 flex-shrink-0">
             <div class="sticky top-8 bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-2xl">
                 <div class="flex items-center gap-3 mb-8">
@@ -70,7 +75,7 @@
                 
                 <h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">Навигация</h3>
                 <div id="categories-container" class="space-y-2 flex flex-col">
-                    <!-- Категории рендерятся скриптом -->
+                    <!-- Категории -->
                 </div>
             </div>
         </aside>
@@ -92,12 +97,10 @@
                 </div>
             </header>
 
-            <!-- Контейнер для ГЛАВНОГО МЕНЮ (Hero) -->
-            <div id="hero-container" class="hidden mb-10">
-                <!-- Сюда рендерится огромный трек -->
-            </div>
+            <!-- Главное меню (Hero) -->
+            <div id="hero-container" class="hidden mb-10"></div>
 
-            <!-- Контейнер для СПИСКА ТРЕКОВ -->
+            <!-- Список треков -->
             <div id="list-view-container">
                 <div class="flex justify-between items-end mb-4">
                     <h2 id="current-category-title" class="text-2xl font-bold">Все треки</h2>
@@ -111,7 +114,7 @@
         </main>
     </div>
 
-    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР (без изменений) -->
+    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР -->
     <div id="global-player" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 p-3 md:px-6 z-40 hidden">
         <div class="w-full flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-4 w-full md:w-1/3 min-w-0 justify-start">
@@ -144,18 +147,14 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ДЛЯ ОЦЕНКИ (Улучшенное) -->
+    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ -->
     <div id="rating-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="bg-gradient-to-b from-gray-800 to-gray-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden">
-            
-            <!-- Декоративный фон -->
             <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-green-500/20 to-purple-500/20 blur-2xl -z-10"></div>
-
             <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
             
-            <!-- Шапка модалки с обложкой -->
             <div class="flex items-center gap-5 mb-8 z-10 relative">
                 <img id="modal-track-cover" src="" class="w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover shadow-2xl border border-white/20" onerror="this.style.display='none'">
                 <div>
@@ -164,7 +163,6 @@
                 </div>
             </div>
             
-            <!-- Ползунки -->
             <div class="space-y-4 mb-8 z-10 relative">
                 <div>
                     <div class="flex justify-between text-sm mb-1">
@@ -203,7 +201,6 @@
                 </div>
             </div>
 
-            <!-- Итог и кнопка -->
             <div class="flex items-center justify-between border-t border-white/10 pt-6 z-10 relative">
                 <div class="flex items-baseline gap-2">
                     <span class="text-gray-400 text-sm font-medium">Итог:</span>
@@ -216,6 +213,9 @@
             </div>
         </div>
     </div>
+
+    <!-- КОНТЕЙНЕР ДЛЯ УВЕДОМЛЕНИЙ (TOASTS) -->
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
     <script type="module" src="script.js"></script>
 </body>
