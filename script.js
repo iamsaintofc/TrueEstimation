@@ -8,8 +8,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const globalAudio = new Audio();
 let currentTrackId = null;
 let allTracksData = []; 
-let currentCategory = 'Все';
-let ratingTrackId = null; // ID трека, который сейчас оцениваем
+let currentCategory = 'Главное меню'; // Теперь по умолчанию открывается Главное меню
+let ratingTrackId = null;
 
 function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";
@@ -56,14 +56,20 @@ window.openRatingModal = function(trackId) {
     ratingTrackId = trackId;
     document.getElementById('modal-track-title').innerText = track.title;
     document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation';
+    
+    const coverImg = document.getElementById('modal-track-cover');
+    if(track.cover_url) {
+        coverImg.src = track.cover_url;
+        coverImg.style.display = 'block';
+    } else {
+        coverImg.style.display = 'none';
+    }
 
-    // Сброс ползунков на дефолт (3)
     for(let i=1; i<=5; i++) {
         document.getElementById(`crit-${i}`).value = 3;
         document.getElementById(`val-crit-${i}`).innerText = '3 / 6';
     }
     updateTotalScore();
-
     document.getElementById('rating-modal').classList.remove('hidden');
 }
 
@@ -84,30 +90,22 @@ window.updateTotalScore = function() {
 
 window.submitRating = async function() {
     if (!ratingTrackId) return;
-    
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         alert('Чтобы ставить оценки, сначала войди или зарегистрируйся!');
-        closeRatingModal();
-        return;
+        closeRatingModal(); return;
     }
 
     let totalScore = 0;
-    for(let i=1; i<=5; i++) {
-        totalScore += parseInt(document.getElementById(`crit-${i}`).value);
-    }
+    for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value);
 
     const user = session.user;
     const { error } = await supabase
         .from('ratings')
         .upsert({ user_id: user.id, track_id: ratingTrackId, score: totalScore }, { onConflict: 'user_id, track_id' });
 
-    if (error) {
-        alert('Ошибка при сохранении: ' + error.message);
-    } else {
-        closeRatingModal();
-        await loadData(); // Перезагружаем, чтобы обновить средние баллы
-    }
+    if (error) alert('Ошибка при сохранении: ' + error.message);
+    else { closeRatingModal(); await loadData(); }
 }
 
 // --- ПЛЕЕР ---
@@ -182,7 +180,7 @@ window.changeVolume = function(value) {
     document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
 }
 
-// --- ЗАГРУЗКА И ФИЛЬТРАЦИЯ ---
+// --- ЗАГРУЗКА ДАННЫХ ---
 async function loadData() {
     const { data: tracks, error } = await supabase.from('tracks').select('*');
     if (error) { 
@@ -192,11 +190,9 @@ async function loadData() {
 
     allTracksData = [];
     let totalGlobalVotes = 0;
-    const categories = new Set(['Все']);
 
     for (const track of tracks) {
         const { data: ratings } = await supabase.from('ratings').select('score').eq('track_id', track.id);
-        
         let avgScore = 0;
         let votesCount = ratings ? ratings.length : 0;
         totalGlobalVotes += votesCount;
@@ -206,24 +202,30 @@ async function loadData() {
             avgScore = (sum / votesCount).toFixed(1);
         }
 
-        if (track.category && track.category.trim() !== "") categories.add(track.category.trim());
-        else track.category = 'Все';
-
+        if (!track.category || track.category.trim() === "") track.category = 'Без категории';
         allTracksData.push({ ...track, avgScore: parseFloat(avgScore), votesCount });
     }
 
     document.getElementById('stats-container').innerText = `Треков: ${allTracksData.length} | Оценок: ${totalGlobalVotes}`;
     allTracksData.sort((a, b) => b.avgScore - a.avgScore);
 
-    renderCategories(Array.from(categories));
-    renderHero(); 
-    renderTracksList(); 
+    renderCategories(); 
+    renderView(); 
 }
 
-function renderCategories(categories) {
+function renderCategories() {
     const container = document.getElementById('categories-container');
     container.innerHTML = '';
-    categories.forEach(cat => {
+    
+    // Базовые категории, которые есть всегда
+    const baseCategories = ['Главное меню', 'Все'];
+    
+    // Собираем уникальные категории из треков
+    const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все')));
+    
+    const allCategories = [...baseCategories, ...dynamicCategories];
+
+    allCategories.forEach(cat => {
         const isActive = cat === currentCategory;
         const btnClass = isActive ? 'bg-green-500 text-black font-bold' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white font-medium';
         container.innerHTML += `<button onclick="changeCategory('${cat}')" class="w-full text-left px-4 py-2.5 rounded-xl transition-all text-sm ${btnClass}">${cat}</button>`;
@@ -232,15 +234,33 @@ function renderCategories(categories) {
 
 window.changeCategory = function(cat) {
     currentCategory = cat;
-    document.getElementById('current-category-title').innerText = cat === 'Все' ? 'Все треки' : cat;
-    renderCategories(Array.from(new Set(allTracksData.map(t => t.category))));
-    renderTracksList();
+    renderCategories();
+    renderView();
 }
 
+// Управление отображением (Главное меню ИЛИ Список)
+function renderView() {
+    const heroContainer = document.getElementById('hero-container');
+    const listViewContainer = document.getElementById('list-view-container');
+
+    if (currentCategory === 'Главное меню') {
+        listViewContainer.classList.add('hidden');
+        heroContainer.classList.remove('hidden');
+        renderHero();
+    } else {
+        heroContainer.classList.add('hidden');
+        listViewContainer.classList.remove('hidden');
+        document.getElementById('current-category-title').innerText = currentCategory === 'Все' ? 'Все треки' : currentCategory;
+        renderTracksList();
+    }
+}
+
+// ОГРОМНЫЙ ГЛАВНЫЙ ТРЕК
 function renderHero() {
     const heroContainer = document.getElementById('hero-container');
     if (allTracksData.length === 0 || allTracksData[0].avgScore === 0) {
-        heroContainer.classList.add('hidden'); return;
+        heroContainer.innerHTML = `<div class="text-center text-gray-400 py-20 bg-white/5 rounded-3xl border border-white/10"><p class="text-xl">Пока нет оценок. Поставь первую оценку, чтобы определить лучший трек!</p></div>`;
+        return;
     }
 
     const topTrack = allTracksData[0];
@@ -248,33 +268,48 @@ function renderHero() {
     const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-1" d="M8 5v14l11-7z"/>`;
 
     heroContainer.innerHTML = `
-        <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-6 md:p-8 rounded-3xl border border-green-500/30 shadow-2xl overflow-hidden flex flex-col md:flex-row items-center gap-6 group">
-            <div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-green-500/20 rounded-full blur-3xl"></div>
-            <img src="${topTrack.cover_url || ''}" class="w-40 h-40 md:w-48 md:h-48 rounded-2xl object-cover shadow-[0_0_30px_rgba(34,197,94,0.3)] z-10 shrink-0">
-            <div class="flex-1 text-center md:text-left z-10 w-full">
-                <div class="text-green-400 text-xs font-bold tracking-widest uppercase mb-2">🏆 Трек недели / Лучшее</div>
-                <h2 class="text-3xl md:text-5xl font-extrabold mb-2 tracking-tight line-clamp-1">${topTrack.title}</h2>
-                <p class="text-gray-300 text-lg mb-6">${topTrack.artist || 'TrueEstimation'}</p>
-                <div class="flex items-center justify-center md:justify-start gap-4">
-                    <button onclick="playTrack(${topTrack.id})" class="w-14 h-14 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-xl hover:scale-105">
-                        <svg class="w-6 h-6 card-play-icon card-icon-${topTrack.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+        <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-8 md:p-12 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group">
+            <!-- Атмосферный фон -->
+            <div class="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 left-0 -ml-32 -mb-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
+            
+            <div class="text-green-400 text-sm font-bold tracking-widest uppercase mb-6 flex items-center gap-2">
+                <span>🏆</span> Трек №1 на сайте <span>🏆</span>
+            </div>
+            
+            <!-- Огромная обложка -->
+            <img src="${topTrack.cover_url || 'https://via.placeholder.com/500?text=No+Cover'}" class="w-64 h-64 md:w-80 md:h-80 rounded-3xl object-cover shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-10 mb-8 border-4 border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
+            
+            <h2 class="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight z-10">${topTrack.title}</h2>
+            <p class="text-xl text-gray-300 mb-8 z-10">${topTrack.artist || 'TrueEstimation'}</p>
+            
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 z-10 w-full">
+                <div class="flex items-center gap-4 bg-black/40 px-6 py-3 rounded-2xl border border-white/10">
+                    <button onclick="playTrack(${topTrack.id})" class="w-16 h-16 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-xl hover:scale-105">
+                        <svg class="w-8 h-8 card-play-icon card-icon-${topTrack.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
                     </button>
                     <div class="text-left">
-                        <div class="text-yellow-400 font-extrabold text-2xl">${topTrack.avgScore} <span class="text-sm text-gray-400 font-medium">/ 30</span></div>
-                        <div class="text-xs text-gray-400">${topTrack.votesCount} голосов</div>
+                        <div class="text-yellow-400 font-extrabold text-3xl">${topTrack.avgScore} <span class="text-lg text-gray-400 font-medium">/ 30</span></div>
+                        <div class="text-sm text-gray-400 font-medium">${topTrack.votesCount} оценок</div>
                     </div>
                 </div>
+                
+                <button onclick="openRatingModal(${topTrack.id})" class="bg-white/10 hover:bg-white/20 border border-white/20 px-8 py-4 rounded-2xl font-bold text-lg transition-all active:scale-95">
+                    Оценить трек
+                </button>
             </div>
         </div>
     `;
-    heroContainer.classList.remove('hidden');
 }
 
 function renderTracksList() {
     const container = document.getElementById('tracks-container');
     container.innerHTML = '';
+    
     let filteredTracks = allTracksData;
-    if (currentCategory !== 'Все') filteredTracks = allTracksData.filter(t => t.category === currentCategory);
+    if (currentCategory !== 'Все') {
+        filteredTracks = allTracksData.filter(t => t.category === currentCategory);
+    }
 
     if (filteredTracks.length === 0) {
         container.innerHTML = `<p class="text-center text-gray-400 py-10">В этой категории пока нет треков</p>`; return;
@@ -300,16 +335,12 @@ function renderTracksList() {
                     </div>
                 </div>
                 
-                <!-- Правая часть с оценкой и кнопкой -->
                 <div class="flex items-center gap-4">
                     <div class="text-right hidden sm:block">
                         <div class="text-yellow-400 font-extrabold text-lg">⭐ ${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-xs text-gray-500 font-medium">/ 30</span></div>
                         <div class="text-[10px] text-gray-400">${track.votesCount} оценок</div>
                     </div>
-                    
-                    <button onclick="openRatingModal(${track.id})" class="bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95">
-                        Оценить
-                    </button>
+                    <button onclick="openRatingModal(${track.id})" class="bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95">Оценить</button>
                 </div>
             </div>
         `;
