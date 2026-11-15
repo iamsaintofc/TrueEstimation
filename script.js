@@ -23,6 +23,7 @@ let userPlaylists = []; let currentTrackToAddToPlaylist = null; let allPlaylistT
 let selectedEmojiAvatar = null;
 let selectedAvatarBg = '#1e293b';
 let allReportsData = []; // ДЛЯ ЖАЛОБ
+let notifications = []; let notifChannel = null; let notifTimer = null; let notifUserId = null; let statsIndex = null; let allTrackLikesData = [];
 let allRatingsData = []; let allCommentLikesData = []; let userLinkHandled = false;
 
 // --- ПЕРЕХВАТ ОШИБОК ---
@@ -368,9 +369,10 @@ window.openUserProfile = function(userId) {
                     ${isSelf ? '<div class="text-xs text-cyan-400">Это ты</div>' : ''}
                 </div>
             </div>
-            <div class="grid grid-cols-4 gap-2 mt-5">${stat(rs.length, 'Оценок')}${stat(cm.length, 'Отзывов')}${stat(avg, 'Ср. балл')}${stat(likes, 'Лайков')}</div>
+            ${levelBlockHtml(p)}<div class="grid grid-cols-4 gap-2 mt-3">${stat(rs.length, 'Оценок')}${stat(cm.length, 'Отзывов')}${stat(avg, 'Ср. балл')}${stat(likes, 'Лайков')}</div>
             <div class="flex gap-2 mt-4">${actions}<button onclick="shareUserProfile('${p.id}')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors">Ссылка</button></div>
             ${adminBlock}
+            ${achievementsHtml(p)}
             <h4 class="text-sm font-bold text-gray-300 mt-6 mb-2">Последние оценки</h4>
             <div class="space-y-1">${recent || '<p class="text-sm text-gray-500 py-4 text-center">Пока ничего не оценил</p>'}</div>
         </div>`;
@@ -450,7 +452,7 @@ async function fetchProfile(userId) {
 }
 
 async function updateProfileUI() {
-    if (!currentUserId) { 
+    if (!currentUserId) { onNotifLogout(); 
         document.getElementById('login-btn').classList.remove('hidden'); 
         document.getElementById('user-profile').classList.add('hidden'); 
         document.getElementById('nav-admin').classList.add('hidden'); 
@@ -463,7 +465,7 @@ async function updateProfileUI() {
     isAdmin = (userEmail === MASTER_ADMIN_EMAIL) || currentUserProfile.is_admin;
     
     document.getElementById('login-btn').classList.add('hidden'); 
-    document.getElementById('user-profile').classList.remove('hidden');
+    document.getElementById('user-profile').classList.remove('hidden'); onNotifLogin();
     document.getElementById('user-username-display').innerText = currentUserProfile.username; 
     document.getElementById('user-email-display').innerText = userEmail;
     
@@ -765,7 +767,8 @@ async function loadData() {
         userPlaylists = playlistsRes.data || [];
         allPlaylistTracksData = playlistTracksRes.data || [];
         allReportsData = reportsRes.data || [];
-        allRatingsData = ratings; allCommentLikesData = commentLikes;
+        allRatingsData = ratings; allCommentLikesData = commentLikes; allTrackLikesData = trackLikes;
+        buildStatsIndex(); renderHeaderLevel(); checkAchievementUnlocks();
 
         const ratingsByTrack = new Map(); ratings.forEach(r => { if (!ratingsByTrack.has(r.track_id)) ratingsByTrack.set(r.track_id, []); ratingsByTrack.get(r.track_id).push(r); });
         const likesByTrack = new Map(); trackLikes.forEach(l => { if (!likesByTrack.has(l.track_id)) likesByTrack.set(l.track_id, []); likesByTrack.get(l.track_id).push(l.user_id); });
@@ -1118,7 +1121,7 @@ function renderCommentsView() {
 
                 return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span onclick="openUserProfile('${rep.user_id}')" class="text-xs font-bold cursor-pointer hover:underline ${rep.isAdmin ? 'text-red-400' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-red-500' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
             }).join('');
-            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
+            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(comment.username)}</span>${levelChip(comment.user_id)}${authorAdminBadge}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-red-500' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
@@ -1128,3 +1131,206 @@ function renderCommentsView() {
 
 // Инициализация громкости
 updateVolumeUI();
+
+// ==========================================
+// УВЕДОМЛЕНИЯ
+// ==========================================
+const NOTIF_ICONS = { reply: '💬', like: '❤️', support_reply: '🛟', support_resolved: '✅', admin_granted: '🛡️', admin_revoked: '⚠️' };
+
+function timeAgo(d) {
+    const s = Math.max(1, Math.floor((Date.now() - new Date(d).getTime()) / 1000));
+    if (s < 60) return 'только что';
+    const m = Math.floor(s / 60); if (m < 60) return `${m} мин назад`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h} ч назад`;
+    const dd = Math.floor(h / 24); if (dd < 7) return `${dd} дн назад`;
+    return fmtDate(d);
+}
+
+function renderNotifications() {
+    const list = document.getElementById('notif-list');
+    const badge = document.getElementById('notif-badge');
+    if (!list || !badge) return;
+    const unread = notifications.filter(n => !n.is_read).length;
+    badge.innerText = unread > 9 ? '9+' : unread;
+    badge.classList.toggle('hidden', unread === 0);
+    if (!notifications.length) { list.innerHTML = `<div class="p-8 text-center text-sm text-gray-500">Пока тихо 🎧</div>`; return; }
+    list.innerHTML = notifications.map(n => `
+        <div onclick="openNotification('${n.id}')" class="flex gap-3 px-4 py-3 cursor-pointer border-b border-white/5 hover:bg-white/5 transition-colors ${n.is_read ? 'opacity-60' : 'bg-cyan-500/5'}">
+            <div class="text-xl leading-none mt-0.5">${NOTIF_ICONS[n.type] || '🔔'}</div>
+            <div class="min-w-0 flex-1">
+                <div class="text-sm text-gray-200 break-words">${escapeHtml(n.message)}</div>
+                <div class="text-[10px] text-gray-500 mt-0.5">${timeAgo(n.created_at)}</div>
+            </div>
+            ${n.is_read ? '' : '<div class="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0 shadow-[0_0_8px_rgba(34,211,238,0.9)]"></div>'}
+        </div>`).join('');
+}
+
+async function loadNotifications() {
+    if (!currentUserId) { notifications = []; renderNotifications(); return; }
+    try {
+        const { data, error } = await supabase.from('notifications').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(30);
+        if (!error) { notifications = data || []; renderNotifications(); }
+    } catch (e) { console.error(e); }
+}
+
+function subscribeNotifications() {
+    if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+    if (!currentUserId) return;
+    notifChannel = supabase.channel('notif-' + currentUserId)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUserId}` }, payload => {
+            const n = payload.new;
+            if (notifications.some(x => x.id === n.id)) return;
+            notifications.unshift(n);
+            renderNotifications();
+            showToast(`${NOTIF_ICONS[n.type] || '🔔'} ${n.message}`, 'success');
+            if (n.type.startsWith('support')) refreshReports();
+            if (n.type.startsWith('admin')) updateProfileUI().then(() => loadData());
+        })
+        .subscribe();
+}
+
+function onNotifLogin() {
+    document.getElementById('notif-wrap')?.classList.remove('hidden');
+    if (notifUserId !== currentUserId) { notifUserId = currentUserId; subscribeNotifications(); }
+    loadNotifications();
+    if (!notifTimer) notifTimer = setInterval(loadNotifications, 60000); // запасной вариант, если realtime не включён
+}
+function onNotifLogout() {
+    document.getElementById('notif-wrap')?.classList.add('hidden');
+    document.getElementById('notif-panel')?.classList.add('hidden');
+    if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+    if (notifTimer) { clearInterval(notifTimer); notifTimer = null; }
+    notifUserId = null; notifications = []; renderNotifications();
+}
+
+window.toggleNotifPanel = function(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById('notif-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) loadNotifications();
+}
+window.closeNotifPanel = function() { document.getElementById('notif-panel')?.classList.add('hidden'); }
+
+window.openNotification = async function(id) {
+    const n = notifications.find(x => String(x.id) === String(id));
+    if (!n) return;
+    if (!n.is_read) {
+        n.is_read = true; renderNotifications();
+        await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
+    }
+    closeNotifPanel();
+    if (n.type === 'reply' || n.type === 'like') changeCategory('Комментарии');
+    else if (n.type.startsWith('support')) { await refreshReports(); openSupportModal(); switchSupportTab('my'); }
+    else if (n.type.startsWith('admin') && isAdmin) changeCategory('AdminPanel');
+}
+
+window.markAllNotificationsRead = async function() {
+    if (!notifications.some(n => !n.is_read)) return;
+    notifications.forEach(n => n.is_read = true); renderNotifications();
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUserId).eq('is_read', false);
+}
+window.clearNotifications = async function() {
+    if (!notifications.length) return;
+    notifications = []; renderNotifications();
+    await supabase.from('notifications').delete().eq('user_id', currentUserId);
+}
+document.addEventListener('click', e => { if (!e.target.closest('#notif-wrap')) closeNotifPanel(); });
+
+// ==========================================
+// УРОВНИ И АЧИВКИ (считаются на лету из данных, SQL не нужен)
+// ==========================================
+const LEVEL_NAMES = ['Новичок', 'Слушатель', 'Ценитель', 'Меломан', 'Критик', 'Эксперт', 'Мастер', 'Гуру', 'Легенда', 'Икона'];
+
+const ACHIEVEMENTS = [
+    { id: 'rate_1',   icon: '⭐', title: 'Первая оценка',  desc: 'Оцени первый трек',               check: s => s.ratings >= 1 },
+    { id: 'rate_10',  icon: '🎧', title: 'Меломан',        desc: 'Поставь 10 оценок',               check: s => s.ratings >= 10 },
+    { id: 'rate_50',  icon: '🏆', title: 'Критик',         desc: 'Поставь 50 оценок',               check: s => s.ratings >= 50 },
+    { id: 'rate_100', icon: '👑', title: 'Легенда',        desc: 'Поставь 100 оценок',              check: s => s.ratings >= 100 },
+    { id: 'com_1',    icon: '💬', title: 'Голос',          desc: 'Напиши первый отзыв',             check: s => s.comments >= 1 },
+    { id: 'com_10',   icon: '📝', title: 'Рецензент',      desc: 'Напиши 10 отзывов',               check: s => s.comments >= 10 },
+    { id: 'likes_10', icon: '❤️', title: 'Любимец',        desc: 'Набери 10 лайков на отзывах',     check: s => s.likesReceived >= 10 },
+    { id: 'likes_50', icon: '🔥', title: 'Звезда',         desc: 'Набери 50 лайков на отзывах',     check: s => s.likesReceived >= 50 },
+    { id: 'rep_10',   icon: '🤝', title: 'Собеседник',     desc: 'Оставь 10 ответов',               check: s => s.replies >= 10 },
+    { id: 'tl_10',    icon: '💿', title: 'Коллекционер',   desc: 'Лайкни 10 треков',                check: s => s.trackLikes >= 10 },
+    { id: 'strict',   icon: '⚖️', title: 'Строгий судья',  desc: 'Средний балл ≤ 12 при 5+ оценках', check: s => s.ratings >= 5 && s.avg <= 12 },
+    { id: 'kind',     icon: '🌈', title: 'Добряк',         desc: 'Средний балл ≥ 24 при 5+ оценках', check: s => s.ratings >= 5 && s.avg >= 24 },
+    { id: 'admin',    icon: '🛡️', title: 'Страж',          desc: 'Быть администратором',            check: (s, p) => !!(p && (p.is_admin || p.email === MASTER_ADMIN_EMAIL)) }
+];
+
+function finalizeStats(s) {
+    s.avg = s.ratings ? s.scoreSum / s.ratings : 0;
+    s.xp = s.ratings * 10 + s.comments * 15 + s.likesReceived * 5 + s.replies * 5 + s.trackLikes * 2;
+    const level = Math.floor(Math.sqrt(s.xp / 25)) + 1;
+    const base = 25 * (level - 1) ** 2, next = 25 * level ** 2;
+    s.level = level; s.levelName = LEVEL_NAMES[Math.min(level - 1, LEVEL_NAMES.length - 1)];
+    s.levelBase = base; s.levelNext = next; s.levelPct = Math.round(((s.xp - base) / (next - base)) * 100);
+    return s;
+}
+
+function buildStatsIndex() {
+    statsIndex = new Map();
+    const get = id => { let s = statsIndex.get(id); if (!s) { s = { ratings: 0, scoreSum: 0, comments: 0, likesReceived: 0, replies: 0, trackLikes: 0 }; statsIndex.set(id, s); } return s; };
+    const owner = new Map();
+    allRatingsData.forEach(r => { const s = get(r.user_id); s.ratings++; s.scoreSum += r.score || 0; if (r.comment && r.comment.trim()) { s.comments++; owner.set(r.id, r.user_id); } });
+    allCommentLikesData.forEach(l => { const o = owner.get(l.rating_id); if (o && o !== l.user_id) get(o).likesReceived++; });
+    allRepliesData.forEach(r => get(r.user_id).replies++);
+    allTrackLikesData.forEach(l => get(l.user_id).trackLikes++);
+    statsIndex.forEach(finalizeStats);
+}
+
+function getStats(userId) {
+    return (statsIndex && statsIndex.get(userId)) || finalizeStats({ ratings: 0, scoreSum: 0, comments: 0, likesReceived: 0, replies: 0, trackLikes: 0 });
+}
+function getAchievements(userId) {
+    const s = getStats(userId), p = allProfilesData.find(x => x.id === userId);
+    return ACHIEVEMENTS.map(a => ({ ...a, earned: a.check(s, p) }));
+}
+
+function levelChip(userId) {
+    const s = getStats(userId);
+    return `<span class="text-[10px] font-bold ml-2 px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30" title="${escapeHtml(s.levelName)} · ${s.xp} XP">Ур. ${s.level}</span>`;
+}
+
+function levelBlockHtml(p) {
+    const s = getStats(p.id);
+    return `<div class="mt-5 p-4 rounded-xl bg-black/30 border border-cyan-500/20">
+        <div class="flex items-baseline justify-between mb-2">
+            <div><span class="text-2xl font-extrabold text-cyan-400 neon-text">Ур. ${s.level}</span> <span class="text-sm font-bold text-gray-300 ml-1">${escapeHtml(s.levelName)}</span></div>
+            <div class="text-xs text-gray-400">${s.xp} / ${s.levelNext} XP</div>
+        </div>
+        <div class="h-2 rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-600 to-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.8)]" style="width:${Math.min(100, Math.max(2, s.levelPct))}%"></div></div>
+        <div class="text-[10px] text-gray-500 mt-1.5">Оценка +10 XP · отзыв +15 · лайк на отзыве +5 · ответ +5 · лайк трека +2</div>
+    </div>`;
+}
+
+function achievementsHtml(p) {
+    const list = getAchievements(p.id);
+    const got = list.filter(a => a.earned).length;
+    return `<div class="flex items-center justify-between mt-6 mb-2"><h4 class="text-sm font-bold text-gray-300">Достижения</h4><span class="text-xs text-gray-500">${got} / ${list.length}</span></div>
+    <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">${list.map(a => `
+        <div title="${escapeHtml(a.desc)}" class="rounded-xl p-2 text-center border transition-colors ${a.earned ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]' : 'bg-black/20 border-white/5 opacity-40 grayscale'}">
+            <div class="text-2xl leading-none">${a.icon}</div>
+            <div class="text-[11px] font-bold mt-1 ${a.earned ? 'text-white' : 'text-gray-400'}">${a.title}</div>
+            <div class="text-[9px] text-gray-500 leading-tight mt-0.5">${a.desc}</div>
+        </div>`).join('')}</div>`;
+}
+
+function renderHeaderLevel() {
+    const el = document.getElementById('user-level-display');
+    if (!el || !currentUserId) return;
+    const s = getStats(currentUserId);
+    el.innerText = `Ур. ${s.level} · ${s.levelName} · ${s.xp} XP`;
+}
+
+// Тост при получении новой ачивки (первый запуск молча запоминает уже полученные)
+function checkAchievementUnlocks() {
+    if (!currentUserId) return;
+    const key = 'te_ach_' + currentUserId;
+    const earned = getAchievements(currentUserId).filter(a => a.earned);
+    let known = null;
+    try { known = JSON.parse(localStorage.getItem(key)); } catch (e) {}
+    if (Array.isArray(known)) {
+        earned.filter(a => !known.includes(a.id)).forEach((a, i) => setTimeout(() => showToast(`${a.icon} Достижение: ${a.title}!`, 'success'), 600 + i * 1200));
+    }
+    try { localStorage.setItem(key, JSON.stringify(earned.map(a => a.id))); } catch (e) {}
+}
