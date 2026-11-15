@@ -1,8 +1,8 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
 // === ВСТАВЬ СВОИ КЛЮЧИ СЮДА ===
-const supabaseUrl = 'https://szmwwykgtwdosouands.supabase.co'; // Твой Project URL
-const supabaseKey = 'sb_publishable_0r_04raj-...'; // Твой Publishable Key (длинная строка)
+const supabaseUrl = 'https://szmwwykgtwdosauounds.supabase.co/rest/v1/'; // Твой Project URL
+const supabaseKey = 'sb_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; // Твой Publishable Key (длинная строка)
 // ==============================
 
 const supabase = createClient(supabaseUrl, supabaseKey);
