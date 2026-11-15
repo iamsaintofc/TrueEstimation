@@ -12,6 +12,21 @@ let currentCategory = 'Главное меню';
 let ratingTrackId = null;
 let previousVolume = 1;
 
+// Состояния плеера
+let isShuffle = false;
+let repeatMode = 0; // 0 - выкл, 1 - повтор всех, 2 - повтор одного
+
+// --- ХЕЛПЕР ЭКРАНИРОВАНИЯ ---
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // --- УВЕДОМЛЕНИЯ ---
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
@@ -114,18 +129,103 @@ window.toggleGlobalPlay = function() {
 
 window.playNext = function() {
     if (!currentTrackId || allTracksData.length === 0) return;
-    const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
-    let nextIndex = currentIndex + 1;
-    if (nextIndex >= allTracksData.length) nextIndex = 0; 
+    
+    // Если включен повтор одного трека
+    if (repeatMode === 2) {
+        globalAudio.currentTime = 0;
+        globalAudio.play();
+        return;
+    }
+
+    let nextIndex;
+    if (isShuffle) {
+        nextIndex = Math.floor(Math.random() * allTracksData.length);
+    } else {
+        const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
+        nextIndex = currentIndex + 1;
+        if (nextIndex >= allTracksData.length) {
+            if (repeatMode === 1) nextIndex = 0; // Повтор всех треков
+            else {
+                // Конец плейлиста
+                globalAudio.pause();
+                updateGlobalPlayPauseIcon(false);
+                updateAllPlayIcons();
+                return;
+            }
+        }
+    }
     playTrack(allTracksData[nextIndex].id);
 }
 
 window.playPrev = function() {
     if (!currentTrackId || allTracksData.length === 0) return;
-    const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
-    let prevIndex = currentIndex - 1;
-    if (prevIndex < 0) prevIndex = allTracksData.length - 1; 
+    
+    if (repeatMode === 2) {
+        globalAudio.currentTime = 0;
+        globalAudio.play();
+        return;
+    }
+
+    let prevIndex;
+    if (isShuffle) {
+        prevIndex = Math.floor(Math.random() * allTracksData.length);
+    } else {
+        const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId);
+        prevIndex = currentIndex - 1;
+        if (prevIndex < 0) {
+            if (repeatMode === 1) prevIndex = allTracksData.length - 1;
+            else prevIndex = 0;
+        }
+    }
     playTrack(allTracksData[prevIndex].id);
+}
+
+window.toggleShuffle = function() {
+    isShuffle = !isShuffle;
+    const btn = document.getElementById('shuffle-btn');
+    if (isShuffle) {
+        btn.classList.add('text-green-500');
+        btn.classList.remove('text-gray-400');
+        showToast('Перемешивание включено', 'success');
+    } else {
+        btn.classList.remove('text-green-500');
+        btn.classList.add('text-gray-400');
+        showToast('Перемешивание выключено', 'success');
+    }
+}
+
+window.toggleRepeat = function() {
+    repeatMode = (repeatMode + 1) % 3;
+    const btn = document.getElementById('repeat-btn');
+    const badge = document.getElementById('repeat-badge');
+    
+    btn.classList.remove('text-green-500', 'text-gray-400');
+    badge.classList.add('hidden');
+    
+    if (repeatMode === 0) {
+        btn.classList.add('text-gray-400');
+        showToast('Повтор выключен', 'success');
+    } else if (repeatMode === 1) {
+        btn.classList.add('text-green-500');
+        showToast('Повтор всех треков', 'success');
+    } else if (repeatMode === 2) {
+        btn.classList.add('text-green-500');
+        badge.classList.remove('hidden');
+        showToast('Повтор текущего трека', 'success');
+    }
+}
+
+window.openCoverModal = function() {
+    if (!currentTrackId) return;
+    const track = allTracksData.find(t => t.id === currentTrackId);
+    if (!track || !track.cover_url) return;
+    
+    document.getElementById('cover-modal-img').src = track.cover_url;
+    document.getElementById('cover-modal').classList.remove('hidden');
+}
+
+window.closeCoverModal = function() {
+    document.getElementById('cover-modal').classList.add('hidden');
 }
 
 function updateAllPlayIcons() {
@@ -151,11 +251,9 @@ function updateGlobalPlayPauseIcon(isPlaying) {
     }
 }
 
-// --- ФИКС ХИТБОКСОВ (Клик по любой точке) ---
+// --- ХИТБОКСЫ ---
 document.getElementById('progress-container').addEventListener('mousedown', function(e) {
-    // Игнорируем клик по нативному инпуту, чтобы не было двойного срабатывания
     if (e.target.tagName.toLowerCase() === 'input') return;
-    
     const rect = this.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     
@@ -171,25 +269,21 @@ document.getElementById('progress-container').addEventListener('mousedown', func
 
 document.getElementById('volume-container').addEventListener('mousedown', function(e) {
     if (e.target.tagName.toLowerCase() === 'input') return;
-    
     const rect = this.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     changeVolume(percent);
     updateThumbPosition('volume', percent);
 });
 
-// Вспомогательная функция для перемещения визуального кружка
 function updateThumbPosition(type, percent) {
     const thumb = document.getElementById(`${type}-thumb`);
     if (thumb) {
         thumb.style.left = `${percent * 100}%`;
-        // Если громкость на нуле, скрываем кружок
         if (type === 'volume' && percent === 0) thumb.style.opacity = '0';
         else if (percent > 0) thumb.style.opacity = '1';
     }
 }
 
-// --- ОБНОВЛЕНИЕ ПРИ ВОСПРОИЗВЕДЕНИИ ---
 globalAudio.addEventListener('timeupdate', () => {
     if (!globalAudio.duration) return;
     const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
@@ -205,7 +299,12 @@ globalAudio.addEventListener('loadedmetadata', () => {
 });
 
 globalAudio.addEventListener('ended', () => {
-    playNext();
+    if (repeatMode === 2) {
+        globalAudio.currentTime = 0;
+        globalAudio.play();
+    } else {
+        playNext();
+    }
 });
 
 window.seekGlobalAudio = function(value) { 
@@ -303,30 +402,47 @@ window.submitRating = async function() {
     }
 }
 
-// --- ЗАГРУЗКА ДАННЫХ ---
+// --- ЗАГРУЗКА ДАННЫХ (ОПТИМИЗИРОВАНО) ---
 async function loadData() {
-    const { data: tracks, error } = await supabase.from('tracks').select('*');
-    if (error) { 
-        document.getElementById('tracks-container').innerHTML = `<p class="text-red-500">Ошибка загрузки: ${error.message}</p>`;
+    // Делаем 2 запроса параллельно вместо N+1
+    const [tracksRes, ratingsRes] = await Promise.all([
+        supabase.from('tracks').select('*'),
+        supabase.from('ratings').select('track_id, score')
+    ]);
+
+    if (tracksRes.error) { 
+        document.getElementById('tracks-container').innerHTML = `<p class="text-red-500">Ошибка загрузки: ${escapeHtml(tracksRes.error.message)}</p>`;
         return; 
+    }
+
+    const tracks = tracksRes.data || [];
+    const ratings = ratingsRes.data || [];
+
+    // Группируем оценки
+    const scoresByTrack = new Map();
+    for (const r of ratings) {
+        if (!scoresByTrack.has(r.track_id)) scoresByTrack.set(r.track_id, []);
+        scoresByTrack.get(r.track_id).push(r.score);
     }
 
     allTracksData = [];
     let totalGlobalVotes = 0;
 
     for (const track of tracks) {
-        const { data: ratings } = await supabase.from('ratings').select('score').eq('track_id', track.id);
-        let avgScore = 0;
-        let votesCount = ratings ? ratings.length : 0;
+        const scores = scoresByTrack.get(track.id) || [];
+        const votesCount = scores.length;
         totalGlobalVotes += votesCount;
 
+        let avgScore = 0;
         if (votesCount > 0) {
-            const sum = ratings.reduce((acc, curr) => acc + curr.score, 0);
-            avgScore = (sum / votesCount).toFixed(1);
+            const sum = scores.reduce((acc, curr) => acc + curr, 0);
+            avgScore = parseFloat((sum / votesCount).toFixed(1));
         }
 
-        if (!track.category || track.category.trim() === "") track.category = 'Без категории';
-        allTracksData.push({ ...track, avgScore: parseFloat(avgScore), votesCount });
+        let category = track.category;
+        if (!category || category.trim() === "") category = 'Без категории';
+
+        allTracksData.push({ ...track, category, avgScore, votesCount });
     }
 
     document.getElementById('stats-container').innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
@@ -338,18 +454,20 @@ async function loadData() {
 
 function renderCategories() {
     const container = document.getElementById('categories-container');
-    container.innerHTML = '';
-    const baseCategories = ['Главное меню', 'Все'];
     const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все')));
     
     document.getElementById('nav-main').className = currentCategory === 'Главное меню' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
     document.getElementById('nav-all').className = currentCategory === 'Все' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
 
-    dynamicCategories.forEach(cat => {
+    const htmlParts = dynamicCategories.map(cat => {
         const isActive = cat === currentCategory;
         const btnClass = isActive ? 'bg-white/10 text-white font-bold' : 'text-gray-300 hover:text-white hover:bg-white/5 font-medium';
-        container.innerHTML += `<button onclick="changeCategory('${cat}')" class="w-full text-left px-4 py-2.5 rounded-xl transition-all text-sm ${btnClass}">${cat}</button>`;
+        const safeCat = escapeHtml(cat);
+        const catArg = escapeHtml(JSON.stringify(cat));
+        return `<button onclick='changeCategory(${catArg})' class="w-full text-left px-4 py-2.5 rounded-xl transition-all text-sm ${btnClass}">${safeCat}</button>`;
     });
+
+    container.innerHTML = htmlParts.join('');
 }
 
 window.changeCategory = function(cat) {
@@ -385,6 +503,11 @@ function renderHero() {
     const isPlayingThis = currentTrackId === topTrack.id && !globalAudio.paused;
     const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-1" d="M8 5v14l11-7z"/>`;
 
+    const safeTitle = escapeHtml(topTrack.title);
+    const safeArtist = escapeHtml(topTrack.artist || 'TrueEstimation');
+    const safeCover = topTrack.cover_url ? escapeHtml(topTrack.cover_url) : 'https://via.placeholder.com/500?text=No+Cover';
+    const topId = Number(topTrack.id);
+
     heroContainer.innerHTML = `
         <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-6 md:p-8 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group mt-2 w-full max-w-3xl mx-auto">
             <div class="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl"></div>
@@ -393,15 +516,15 @@ function renderHero() {
                 <span>🏆</span> Трек №1 на сайте <span>🏆</span>
             </div>
             
-            <img src="${topTrack.cover_url || 'https://via.placeholder.com/500?text=No+Cover'}" class="w-48 h-48 md:w-56 md:h-56 rounded-2xl object-cover shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-10 mb-6 border-4 border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
+            <img src="${safeCover}" class="w-48 h-48 md:w-56 md:h-56 rounded-2xl object-cover shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-10 mb-6 border-4 border-white/10 group-hover:scale-[1.02] transition-transform duration-500">
             
-            <h2 class="text-3xl md:text-5xl font-extrabold mb-2 tracking-tight z-10 line-clamp-1">${topTrack.title}</h2>
-            <p class="text-lg text-gray-300 mb-6 z-10">${topTrack.artist || 'TrueEstimation'}</p>
+            <h2 class="text-3xl md:text-5xl font-extrabold mb-2 tracking-tight z-10 line-clamp-1">${safeTitle}</h2>
+            <p class="text-lg text-gray-300 mb-6 z-10">${safeArtist}</p>
             
             <div class="flex flex-col md:flex-row items-center justify-center gap-6 z-10 w-full">
                 <div class="flex items-center gap-4 bg-black/40 px-5 py-2 rounded-2xl border border-white/10">
-                    <button onclick="playTrack(${topTrack.id})" class="w-12 h-12 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-xl hover:scale-105">
-                        <svg class="w-6 h-6 card-play-icon card-icon-${topTrack.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+                    <button onclick="playTrack(${topId})" class="w-12 h-12 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-xl hover:scale-105">
+                        <svg class="w-6 h-6 card-play-icon card-icon-${topId}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
                     </button>
                     <div class="text-left">
                         <div class="text-yellow-400 font-extrabold text-2xl">${topTrack.avgScore} <span class="text-sm text-gray-400 font-medium">/ 30</span></div>
@@ -409,7 +532,7 @@ function renderHero() {
                     </div>
                 </div>
                 
-                <button onclick="openRatingModal(${topTrack.id})" class="bg-white/10 hover:bg-white/20 border border-white/20 px-6 py-3 rounded-2xl font-bold text-base transition-all active:scale-95">
+                <button onclick="openRatingModal(${topId})" class="bg-white/10 hover:bg-white/20 border border-white/20 px-6 py-3 rounded-2xl font-bold text-base transition-all active:scale-95">
                     Оценить трек
                 </button>
             </div>
@@ -419,7 +542,6 @@ function renderHero() {
 
 function renderTracksList() {
     const container = document.getElementById('tracks-container');
-    container.innerHTML = '';
     
     let filteredTracks = allTracksData;
     if (currentCategory !== 'Все') {
@@ -430,26 +552,30 @@ function renderTracksList() {
         container.innerHTML = `<p class="text-center text-gray-400 py-10">В этой категории пока нет треков</p>`; return;
     }
 
-    for (const track of filteredTracks) {
+    const htmlParts = filteredTracks.map(track => {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
         const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
 
-        const trackHTML = `
+        const safeTitle = escapeHtml(track.title);
+        const safeArtist = escapeHtml(track.artist || 'TrueEstimation');
+        const safeCover = track.cover_url ? escapeHtml(track.cover_url) : null;
+        const trackIdArg = Number(track.id);
+
+        return `
             <div class="group flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default">
-                
                 <div class="flex items-center gap-4 flex-1 min-w-0">
-                    <button onclick="playTrack(${track.id})" class="w-10 h-10 flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
-                        <svg class="w-6 h-6 card-play-icon card-icon-${track.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+                    <button onclick="playTrack(${trackIdArg})" class="w-10 h-10 flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
+                        <svg class="w-6 h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
                     </button>
 
-                    ${track.cover_url 
-                        ? `<img src="${track.cover_url}" class="w-10 h-10 rounded-md object-cover shadow-sm shrink-0">` 
+                    ${safeCover 
+                        ? `<img src="${safeCover}" class="w-10 h-10 rounded-md object-cover shadow-sm shrink-0">` 
                         : `<div class="w-10 h-10 rounded-md bg-gray-800 flex items-center justify-center shrink-0"><svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
                     }
                     
                     <div class="flex-1 min-w-0 flex flex-col justify-center">
-                        <h2 class="text-sm font-bold truncate">${track.title}</h2>
-                        <p class="text-xs text-gray-400 truncate">${track.artist || 'TrueEstimation'}</p>
+                        <h2 class="text-sm font-bold truncate">${safeTitle}</h2>
+                        <p class="text-xs text-gray-400 truncate">${safeArtist}</p>
                     </div>
                 </div>
                 
@@ -459,12 +585,13 @@ function renderTracksList() {
                         <div class="text-[10px] text-gray-500">${track.votesCount} оценок</div>
                     </div>
                     
-                    <button onclick="openRatingModal(${track.id})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100">Оценить</button>
+                    <button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100">Оценить</button>
                 </div>
             </div>
         `;
-        container.innerHTML += trackHTML;
-    }
+    });
+
+    container.innerHTML = htmlParts.join('');
 }
 
 // Инициализация
