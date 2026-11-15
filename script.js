@@ -1,16 +1,24 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-// === ВСТАВЬ СВОИ КЛЮЧИ СЮДА ===
-const supabaseUrl = 'https://szmwwykgtwdosauounds.supabase.co'; 
-const supabaseKey = 'sb_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; 
-// ================================
+const supabaseUrl = 'https://szmwwykgtwdosouands.supabase.co'; 
+const supabaseKey = 'sb_publishable_0r_04raj-G1Ueg3p8E62TQ_X3gpfZER'; 
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Переменная для хранения ID текущего играющего трека
-let currentPlayingAudioId = null;
+// Глобальные переменные плеера
+const globalAudio = new Audio();
+let currentTrackId = null;
+let allTracksData = []; // Храним все треки тут
 
-// Проверяем, вошел ли пользователь
+// Форматирование времени
+function formatTime(seconds) {
+    if (isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+// --- ЛОГИКА АВТОРИЗАЦИИ (не менялась) ---
 supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
         document.getElementById('auth-section').classList.add('hidden');
@@ -26,7 +34,6 @@ supabase.auth.onAuthStateChange((event, session) => {
     }
 });
 
-// Функция Входа/Регистрации
 window.login = async function() {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
@@ -47,82 +54,109 @@ window.logout = async function() {
     await supabase.auth.signOut();
 }
 
-// Форматирование времени (например, 125 сек -> 2:05)
-function formatTime(seconds) {
-    if (isNaN(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
+// --- ЛОГИКА ПЛЕЕРА ---
+window.playTrack = function(trackId) {
+    const track = allTracksData.find(t => t.id === trackId);
+    if (!track) return;
 
-// Управление плеером (Play/Pause)
-window.togglePlay = function(trackId) {
-    const audio = document.getElementById(`audio-${trackId}`);
-    const btn = document.getElementById(`play-btn-${trackId}`);
+    // Если кликнули на тот же трек, который сейчас играет
+    if (currentTrackId === trackId) {
+        toggleGlobalPlay();
+        return;
+    }
 
-    if (audio.paused) {
-        // Если другой трек играет, останавливаем его
-        if (currentPlayingAudioId && currentPlayingAudioId !== trackId) {
-            const oldAudio = document.getElementById(`audio-${currentPlayingAudioId}`);
-            const oldBtn = document.getElementById(`play-btn-${currentPlayingAudioId}`);
-            if (oldAudio) {
-                oldAudio.pause();
-                oldAudio.currentTime = 0;
-                oldBtn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
-            }
-        }
-        // Включаем новый
-        audio.play();
-        currentPlayingAudioId = trackId;
-        btn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+    // Загружаем новый трек
+    currentTrackId = trackId;
+    globalAudio.src = track.audio_url;
+    globalAudio.play();
+
+    // Обновляем UI фиксированного плеера
+    document.getElementById('global-player').classList.remove('hidden');
+    document.getElementById('player-title').innerText = track.title;
+    
+    const coverImg = document.getElementById('player-cover');
+    if(track.cover_url) {
+        coverImg.src = track.cover_url;
+        coverImg.style.display = 'block';
     } else {
-        // Ставим на паузу
-        audio.pause();
-        btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+        coverImg.style.display = 'none';
+    }
+
+    // Меняем иконки у всех карточек (сбрасываем на Play)
+    document.querySelectorAll('.card-play-icon').forEach(icon => {
+        icon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+    });
+    // Включаем иконку Pause на активной карточке (если она есть на экране)
+    const activeCardIcon = document.getElementById(`card-icon-${trackId}`);
+    if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+
+    updateGlobalPlayPauseIcon(true);
+}
+
+window.toggleGlobalPlay = function() {
+    if (!currentTrackId) return;
+
+    if (globalAudio.paused) {
+        globalAudio.play();
+        updateGlobalPlayPauseIcon(true);
+        
+        // Обновляем иконку на карточке в списке
+        const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
+        if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+
+    } else {
+        globalAudio.pause();
+        updateGlobalPlayPauseIcon(false);
+        
+        // Обновляем иконку на карточке
+        const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
+        if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
     }
 }
 
-// Обновление прогресса при проигрывании
-window.updateProgress = function(trackId) {
-    const audio = document.getElementById(`audio-${trackId}`);
-    const progress = document.getElementById(`progress-${trackId}`);
-    const timeText = document.getElementById(`current-time-${trackId}`);
-    const slider = document.getElementById(`slider-${trackId}`);
-    
-    if (audio.duration) {
-        const percent = (audio.currentTime / audio.duration) * 100;
-        progress.style.width = `${percent}%`;
-        slider.value = audio.currentTime;
-        timeText.innerText = formatTime(audio.currentTime);
+function updateGlobalPlayPauseIcon(isPlaying) {
+    const icon = document.getElementById('global-play-icon');
+    if (isPlaying) {
+        icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+    } else {
+        icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; // Убрал ml-1, центруется ровно
     }
 }
 
-// Загрузка метаданных (получаем длительность)
-window.setDuration = function(trackId) {
-    const audio = document.getElementById(`audio-${trackId}`);
-    const durationText = document.getElementById(`duration-${trackId}`);
-    const slider = document.getElementById(`slider-${trackId}`);
+// Слушатели событий аудио
+globalAudio.addEventListener('timeupdate', () => {
+    if (!globalAudio.duration) return;
+    const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
+    document.getElementById('global-progress-bar').style.width = `${percent}%`;
+    document.getElementById('global-slider').value = globalAudio.currentTime;
+    document.getElementById('global-current-time').innerText = formatTime(globalAudio.currentTime);
+});
+
+globalAudio.addEventListener('loadedmetadata', () => {
+    document.getElementById('global-duration').innerText = formatTime(globalAudio.duration);
+    document.getElementById('global-slider').max = globalAudio.duration;
+});
+
+globalAudio.addEventListener('ended', () => {
+    updateGlobalPlayPauseIcon(false);
+    document.getElementById('global-progress-bar').style.width = `0%`;
+    document.getElementById('global-slider').value = 0;
+    document.getElementById('global-current-time').innerText = "0:00";
     
-    durationText.innerText = formatTime(audio.duration);
-    slider.max = audio.duration;
+    const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
+    if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+});
+
+window.seekGlobalAudio = function(value) {
+    globalAudio.currentTime = value;
 }
 
-// Перемотка по клику на слайдер
-window.seekAudio = function(trackId, value) {
-    const audio = document.getElementById(`audio-${trackId}`);
-    audio.currentTime = value;
+window.changeVolume = function(value) {
+    globalAudio.volume = value;
+    document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
 }
 
-// Когда трек закончился
-window.resetPlayBtn = function(trackId) {
-    const btn = document.getElementById(`play-btn-${trackId}`);
-    const progress = document.getElementById(`progress-${trackId}`);
-    btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
-    progress.style.width = `0%`;
-    currentPlayingAudioId = null;
-}
-
-// ГЛАВНАЯ ФУНКЦИЯ ЗАГРУЗКИ ТРЕКОВ
+// --- ЗАГРУЗКА И ОТРИСОВКА ТРЕКОВ ---
 async function loadTracks() {
     const container = document.getElementById('tracks-container');
     const statsContainer = document.getElementById('stats-container');
@@ -133,11 +167,9 @@ async function loadTracks() {
         return; 
     }
 
-    // Массив для сортировки
-    let processedTracks = [];
+    allTracksData = [];
     let totalGlobalVotes = 0;
 
-    // Собираем данные и считаем средние баллы
     for (const track of tracks) {
         const { data: ratings } = await supabase.from('ratings').select('score').eq('track_id', track.id);
         
@@ -150,75 +182,60 @@ async function loadTracks() {
             avgScore = (sum / votesCount).toFixed(1);
         }
 
-        processedTracks.push({ ...track, avgScore, votesCount });
+        allTracksData.push({ ...track, avgScore, votesCount });
     }
 
-    // Обновляем статистику
-    statsContainer.innerText = `Всего треков: ${processedTracks.length}  |  Всего оценок: ${totalGlobalVotes}`;
+    statsContainer.innerText = `Всего треков: ${allTracksData.length}  |  Всего оценок: ${totalGlobalVotes}`;
 
-    // СОРТИРОВКА: Сначала треки с высоким рейтингом. Если оценок нет, они внизу.
-    processedTracks.sort((a, b) => {
+    // Сортировка по рейтингу
+    allTracksData.sort((a, b) => {
         if (b.avgScore == 0) return -1;
         return b.avgScore - a.avgScore;
     });
 
     container.innerHTML = ''; 
 
-    // Отрисовка
-    for (const track of processedTracks) {
+    for (const track of allTracksData) {
+        // Определяем, играет ли этот трек прямо сейчас (после перезагрузки страницы)
+        const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
+        const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path d="M8 5v14l11-7z"/>`;
+
         const trackHTML = `
-            <div class="bg-white/5 backdrop-blur-sm p-5 md:p-6 rounded-2xl border border-white/10 hover:border-green-500/30 transition-all duration-300 shadow-xl group">
-                <div class="flex flex-col md:flex-row gap-5 items-start md:items-center mb-5">
-                    
+            <div class="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 hover:border-green-500/30 transition-all duration-300 shadow-xl group flex items-center justify-between gap-4">
+                
+                <div class="flex items-center gap-4 flex-1 min-w-0">
                     <!-- Обложка -->
                     ${track.cover_url 
-                        ? `<img src="${track.cover_url}" class="w-20 h-20 md:w-24 md:h-24 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform duration-300 shrink-0">` 
-                        : `<div class="w-20 h-20 md:w-24 md:h-24 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center shadow-lg hidden md:flex shrink-0"><svg class="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
+                        ? `<img src="${track.cover_url}" class="w-14 h-14 rounded-lg object-cover shadow-lg shrink-0">` 
+                        : `<div class="w-14 h-14 rounded-lg bg-gray-800 flex items-center justify-center shadow-lg shrink-0"><svg class="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
                     }
                     
-                    <!-- Информация и Кастомный плеер -->
-                    <div class="flex-1 w-full min-w-0">
-                        <h2 class="text-2xl font-bold mb-3 tracking-tight truncate">${track.title}</h2>
+                    <!-- Информация -->
+                    <div class="flex-1 min-w-0">
+                        <h2 class="text-lg font-bold tracking-tight truncate">${track.title}</h2>
                         
-                        <!-- КАСТОМНЫЙ ПЛЕЕР -->
-                        <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
-                            <button id="play-btn-${track.id}" onclick="togglePlay(${track.id})" class="w-10 h-10 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shrink-0">
-                                <svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <div class="flex items-center gap-3 mt-1">
+                            <!-- Кнопка Play прямо в карточке -->
+                            <button onclick="playTrack(${track.id})" class="flex items-center gap-1.5 text-green-400 hover:text-green-300 transition-colors text-sm font-semibold">
+                                <svg id="card-icon-${track.id}" class="w-4 h-4 card-play-icon" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+                                Слушать
                             </button>
                             
-                            <div class="flex-1 flex flex-col gap-1">
-                                <!-- Визуальная полоска -->
-                                <div class="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative cursor-pointer" id="progress-bar-${track.id}">
-                                    <div id="progress-${track.id}" class="h-full bg-green-500 w-0"></div>
-                                    <!-- Невидимый слайдер поверх для перемотки -->
-                                    <input type="range" id="slider-${track.id}" min="0" max="100" value="0" step="0.1" oninput="seekAudio(${track.id}, this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                                </div>
-                                <div class="flex justify-between text-xs text-gray-400 font-medium">
-                                    <span id="current-time-${track.id}">0:00</span>
-                                    <span id="duration-${track.id}">0:00</span>
-                                </div>
+                            <!-- Рейтинг -->
+                            <div class="flex items-center gap-1 text-sm bg-black/30 px-2 py-0.5 rounded border border-white/5">
+                                <span class="text-yellow-400">⭐</span>
+                                <span class="font-bold">${track.avgScore > 0 ? track.avgScore : '-'}</span>
+                                <span class="text-gray-500 text-xs">(${track.votesCount})</span>
                             </div>
-                            <!-- Скрытый оригинальный плеер -->
-                            <audio id="audio-${track.id}" src="${track.audio_url}" ontimeupdate="updateProgress(${track.id})" onloadedmetadata="setDuration(${track.id})" onended="resetPlayBtn(${track.id})"></audio>
                         </div>
                     </div>
                 </div>
                 
-                <div class="h-px w-full bg-white/10 mb-4"></div>
-
-                <!-- Оценки и Кнопки -->
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div class="flex items-center gap-2 bg-black/30 px-4 py-2 rounded-xl border border-white/5 w-full md:w-auto justify-center md:justify-start">
-                        <span class="text-yellow-400 text-xl">⭐</span>
-                        <span class="text-white font-extrabold text-lg">${track.avgScore > 0 ? track.avgScore : '-'}</span>
-                        <span class="text-gray-400 text-sm font-medium">(${track.votesCount} голосов)</span>
-                    </div>
-                    
-                    <div class="flex flex-wrap gap-1.5 justify-center">
-                        ${[1,2,3,4,5,6,7,8,9,10].map(score => 
-                            `<button onclick="rateTrack(${track.id}, ${score})" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-green-500 hover:text-black border border-white/10 font-bold transition-all duration-200 active:scale-90 shadow-sm">${score}</button>`
-                        ).join('')}
-                    </div>
+                <!-- Кнопки оценок -->
+                <div class="hidden md:flex flex-wrap gap-1 justify-end w-1/3">
+                    ${[1,2,3,4,5,6,7,8,9,10].map(score => 
+                        `<button onclick="rateTrack(${track.id}, ${score})" class="w-7 h-7 rounded-md bg-white/5 hover:bg-green-500 hover:text-black border border-white/10 font-bold transition-all duration-200 active:scale-90 shadow-sm text-xs">${score}</button>`
+                    ).join('')}
                 </div>
             </div>
         `;
@@ -226,13 +243,11 @@ async function loadTracks() {
     }
 }
 
-// Постановка оценки
 window.rateTrack = async function(trackId, score) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return alert('Чтобы ставить оценки, сначала войди или зарегистрируйся!');
 
     const user = session.user;
-
     const { error } = await supabase
         .from('ratings')
         .upsert({ user_id: user.id, track_id: trackId, score: score }, { onConflict: 'user_id, track_id' });
@@ -240,27 +255,8 @@ window.rateTrack = async function(trackId, score) {
     if (error) {
         alert('Ошибка при сохранении: ' + error.message);
     } else {
-        // Сохраняем текущее время играющего трека, чтобы плеер не сбрасывался при перерисовке
-        let currentTime = 0;
-        if (currentPlayingAudioId) {
-            const audio = document.getElementById(`audio-${currentPlayingAudioId}`);
-            if (audio) currentTime = audio.currentTime;
-        }
-
-        await loadTracks(); // Перезагружаем список (сработает сортировка)
-
-        // Восстанавливаем воспроизведение
-        if (currentPlayingAudioId) {
-            const audio = document.getElementById(`audio-${currentPlayingAudioId}`);
-            const btn = document.getElementById(`play-btn-${currentPlayingAudioId}`);
-            if (audio) {
-                audio.currentTime = currentTime;
-                audio.play();
-                if(btn) btn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-            }
-        }
+        await loadTracks();
     }
 }
 
-// Запуск
 loadTracks();
