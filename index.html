@@ -15,30 +15,40 @@
                 radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
                 radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
         }
-        /* Стили для всех ползунков */
+        
+        /* --- ИДЕАЛЬНЫЕ ПОЛЗУНКИ --- */
         input[type=range] {
             -webkit-appearance: none;
+            width: 100%;
             background: transparent;
+            margin: 8px 0; /* Отступы сверху и снизу */
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
         }
         input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
             height: 18px;
             width: 18px;
             border-radius: 50%;
             background: #22c55e;
             cursor: pointer;
-            margin-top: -7px; 
-            box-shadow: 0 0 10px rgba(34,197,94,0.5);
-            transition: transform 0.1s;
+            -webkit-appearance: none;
+            margin-top: -6px; /* Точная центровка: (Высота трека 6 - Высота кружка 18) / 2 = -6 */
+            box-shadow: 0 0 10px rgba(34,197,94,0.6);
+            transition: transform 0.1s, box-shadow 0.1s;
         }
-        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(34,197,94,0.9);
         }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
@@ -58,9 +68,9 @@
                     <h1 class="text-xl font-extrabold tracking-tight">TrueEst</h1>
                 </div>
                 
-                <h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">Категории</h3>
+                <h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">Навигация</h3>
                 <div id="categories-container" class="space-y-2 flex flex-col">
-                    <!-- Категории -->
+                    <!-- Категории рендерятся скриптом -->
                 </div>
             </div>
         </aside>
@@ -82,20 +92,26 @@
                 </div>
             </header>
 
-            <div id="hero-container" class="mb-10 hidden"></div>
-
-            <div class="flex justify-between items-end mb-4">
-                <h2 id="current-category-title" class="text-2xl font-bold">Все треки</h2>
+            <!-- Контейнер для ГЛАВНОГО МЕНЮ (Hero) -->
+            <div id="hero-container" class="hidden mb-10">
+                <!-- Сюда рендерится огромный трек -->
             </div>
-            <div id="tracks-container" class="space-y-3">
-                <div class="flex justify-center py-10">
-                    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500"></div>
+
+            <!-- Контейнер для СПИСКА ТРЕКОВ -->
+            <div id="list-view-container">
+                <div class="flex justify-between items-end mb-4">
+                    <h2 id="current-category-title" class="text-2xl font-bold">Все треки</h2>
+                </div>
+                <div id="tracks-container" class="space-y-3">
+                    <div class="flex justify-center py-10">
+                        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500"></div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР -->
+    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР (без изменений) -->
     <div id="global-player" class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 p-3 md:px-6 z-40 hidden">
         <div class="w-full flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-4 w-full md:w-1/3 min-w-0 justify-start">
@@ -128,68 +144,73 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ДЛЯ ОЦЕНКИ -->
-    <div id="rating-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-gray-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl relative">
-            <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    <!-- МОДАЛЬНОЕ ОКНО ДЛЯ ОЦЕНКИ (Улучшенное) -->
+    <div id="rating-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gradient-to-b from-gray-800 to-gray-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden">
+            
+            <!-- Декоративный фон -->
+            <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-green-500/20 to-purple-500/20 blur-2xl -z-10"></div>
+
+            <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
             
-            <h3 class="text-2xl font-extrabold mb-1 truncate" id="modal-track-title">Название трека</h3>
-            <p class="text-gray-400 text-sm mb-6" id="modal-track-artist">Исполнитель</p>
+            <!-- Шапка модалки с обложкой -->
+            <div class="flex items-center gap-5 mb-8 z-10 relative">
+                <img id="modal-track-cover" src="" class="w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover shadow-2xl border border-white/20" onerror="this.style.display='none'">
+                <div>
+                    <h3 class="text-2xl md:text-3xl font-extrabold mb-1 line-clamp-1" id="modal-track-title">Название</h3>
+                    <p class="text-gray-400 font-medium" id="modal-track-artist">Исполнитель</p>
+                </div>
+            </div>
             
             <!-- Ползунки -->
-            <div class="space-y-5 mb-8">
-                <!-- Критерий 1 -->
+            <div class="space-y-4 mb-8 z-10 relative">
                 <div>
                     <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300 font-medium">Текст и смысл</span>
-                        <span id="val-crit-1" class="text-green-400 font-bold">3 / 6</span>
+                        <span class="text-gray-300 font-semibold">Текст и смысл</span>
+                        <span id="val-crit-1" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full">
+                    <input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()">
                 </div>
-                <!-- Критерий 2 -->
                 <div>
                     <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300 font-medium">Бит и ритмика</span>
-                        <span id="val-crit-2" class="text-green-400 font-bold">3 / 6</span>
+                        <span class="text-gray-300 font-semibold">Бит и ритмика</span>
+                        <span id="val-crit-2" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full">
+                    <input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()">
                 </div>
-                <!-- Критерий 3 -->
                 <div>
                     <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300 font-medium">Сведение и мастеринг</span>
-                        <span id="val-crit-3" class="text-green-400 font-bold">3 / 6</span>
+                        <span class="text-gray-300 font-semibold">Сведение и мастеринг</span>
+                        <span id="val-crit-3" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full">
+                    <input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()">
                 </div>
-                <!-- Критерий 4 -->
                 <div>
                     <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300 font-medium">Вайб и атмосфера</span>
-                        <span id="val-crit-4" class="text-green-400 font-bold">3 / 6</span>
+                        <span class="text-gray-300 font-semibold">Вайб и атмосфера</span>
+                        <span id="val-crit-4" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full">
+                    <input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()">
                 </div>
-                <!-- Критерий 5 -->
                 <div>
                     <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-300 font-medium">Оригинальность</span>
-                        <span id="val-crit-5" class="text-green-400 font-bold">3 / 6</span>
+                        <span class="text-gray-300 font-semibold">Оригинальность</span>
+                        <span id="val-crit-5" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span>
                     </div>
-                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="w-full">
+                    <input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()">
                 </div>
             </div>
 
             <!-- Итог и кнопка -->
-            <div class="flex items-center justify-between border-t border-white/10 pt-6">
+            <div class="flex items-center justify-between border-t border-white/10 pt-6 z-10 relative">
                 <div class="flex items-baseline gap-2">
-                    <span class="text-gray-400 text-sm">Итог:</span>
-                    <span id="modal-total-score" class="text-4xl font-extrabold text-white">15</span>
-                    <span class="text-gray-500 font-bold">/ 30</span>
+                    <span class="text-gray-400 text-sm font-medium">Итог:</span>
+                    <span id="modal-total-score" class="text-5xl font-extrabold text-white">15</span>
+                    <span class="text-gray-500 font-bold text-lg">/ 30</span>
                 </div>
-                <button onclick="submitRating()" class="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-xl font-bold transition-transform active:scale-95 shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                <button onclick="submitRating()" class="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-black px-10 py-4 rounded-2xl font-extrabold text-lg transition-transform active:scale-95 shadow-[0_0_20px_rgba(34,197,94,0.4)]">
                     Сохранить
                 </button>
             </div>
