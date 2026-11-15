@@ -690,7 +690,7 @@ window.playTrack = function(trackId, startTime = 0, playImmediately = true) {
     if (playImmediately) globalAudio.play(); else globalAudio.pause();
     document.getElementById('global-player').classList.remove('hidden');
     document.getElementById('player-title').innerText = track.title; document.getElementById('player-artist').innerText = track.artist || 'TrueEstimation';
-    const coverImg = document.getElementById('player-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; }
+    updatePlayerExtras(track); const coverImg = document.getElementById('player-cover'); if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } else { coverImg.style.display = 'none'; }
     if (startTime > 0) { globalAudio.addEventListener('loadedmetadata', () => { globalAudio.currentTime = startTime; }, { once: true }); }
     updateAllPlayIcons(); updateGlobalPlayPauseIcon(playImmediately);
 }
@@ -912,6 +912,7 @@ window.changeCategory = function(cat) {
 }
 
 function renderView() {
+    refreshPlayerExtras();
     try {
         const heroContainer = document.getElementById('hero-container'); 
         const listViewContainer = document.getElementById('list-view-container');
@@ -1750,3 +1751,23 @@ function renderUserRanking() {
     c.innerHTML = head + `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 md:pt-4">${podium}</div><div class="space-y-2 pb-24">${rows}</div>`;
 }
 window.renderAdminPanel = renderAdminPanel;
+
+
+// ==========================================
+// ПЛЕЕР: фон из обложки, лайк / плейлист / оценка прямо в панели
+// ==========================================
+function updatePlayerExtras(track) {
+    const bg = document.getElementById('player-bg');
+    if (bg) bg.style.backgroundImage = track && track.cover_url ? `url("${String(track.cover_url).replace(/"/g, '%22')}")` : 'none';
+    const btn = document.getElementById('player-like-btn');
+    if (!btn) return;
+    const liked = !!(track && track.userLiked);
+    btn.classList.toggle('text-cyan-300', liked);
+    btn.innerHTML = liked
+        ? `<svg class="w-5 h-5 text-cyan-300 fill-current drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+        : `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+}
+function refreshPlayerExtras() { if (currentTrackId) updatePlayerExtras(allTracksData.find(t => t.id === currentTrackId)); }
+window.playerLike = function(e) { if (!currentTrackId) return; likeTrack(currentTrackId, e); refreshPlayerExtras(); };
+window.playerAddToPlaylist = function() { if (!currentTrackId) return; if (!currentUserId) return showToast('Войди!', 'error'); openAddToPlaylistModal(currentTrackId); };
+window.playerRate = function() { if (!currentTrackId) return; if (!currentUserId) return showToast('Войди!', 'error'); openRatingModal(currentTrackId); };
