@@ -11,12 +11,10 @@ let allTracksData = [];
 let currentCategory = 'Главное меню';
 let ratingTrackId = null;
 
-// --- СИСТЕМА КРАСИВЫХ УВЕДОМЛЕНИЙ (TOASTS) ---
+// --- УВЕДОМЛЕНИЯ ---
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    
-    // Цвета в зависимости от типа
     const borderColor = type === 'success' ? 'border-green-500' : 'border-red-500';
     const textColor = type === 'success' ? 'text-green-400' : 'text-red-400';
     const icon = type === 'success' 
@@ -27,13 +25,7 @@ function showToast(message, type = 'success') {
     toast.innerHTML = `<div class="${textColor}">${icon}</div><span class="font-medium text-sm">${message}</span>`;
     
     container.appendChild(toast);
-
-    // Анимация появления
-    setTimeout(() => {
-        toast.classList.remove('translate-y-[-20px]', 'opacity-0');
-    }, 10);
-
-    // Автоудаление через 3.5 секунды
+    setTimeout(() => toast.classList.remove('translate-y-[-20px]', 'opacity-0'), 10);
     setTimeout(() => {
         toast.classList.add('translate-y-[-20px]', 'opacity-0');
         setTimeout(() => toast.remove(), 300);
@@ -47,34 +39,41 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-// --- АВТОРИЗАЦИЯ ---
+// --- АВТОРИЗАЦИЯ И ПРОФИЛЬ ---
 supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
-        document.getElementById('auth-section').classList.add('hidden');
-        document.getElementById('auth-section').classList.remove('flex');
-        document.getElementById('user-info').classList.remove('hidden');
-        document.getElementById('user-info').classList.add('flex');
-        document.getElementById('user-email').innerText = session.user.email;
+        document.getElementById('login-btn').classList.add('hidden');
+        document.getElementById('user-profile').classList.remove('hidden');
+        document.getElementById('user-email-display').innerText = session.user.email;
+        document.getElementById('user-avatar-letter').innerText = session.user.email.charAt(0).toUpperCase();
     } else {
-        document.getElementById('auth-section').classList.remove('hidden');
-        document.getElementById('auth-section').classList.add('flex');
-        document.getElementById('user-info').classList.add('hidden');
-        document.getElementById('user-info').classList.remove('flex');
+        document.getElementById('login-btn').classList.remove('hidden');
+        document.getElementById('user-profile').classList.add('hidden');
     }
 });
 
-window.login = async function() {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
+window.openLoginModal = () => document.getElementById('login-modal').classList.remove('hidden');
+window.closeLoginModal = () => document.getElementById('login-modal').classList.add('hidden');
+
+window.handleLogin = async function() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
     if(!email || !password) return showToast("Введи email и пароль!", "error");
     
     let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    
     if (error && error.message.includes('Invalid login credentials')) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) showToast('Ошибка: ' + signUpError.message, 'error');
-        else showToast('Аккаунт создан! Вы вошли.', 'success');
+        else {
+            showToast('Аккаунт создан! Вы вошли.', 'success');
+            closeLoginModal();
+        }
     } else if (error) {
         showToast('Ошибка: ' + error.message, 'error');
+    } else {
+        showToast('Успешный вход!', 'success');
+        closeLoginModal();
     }
 }
 
@@ -83,72 +82,7 @@ window.logout = async function() {
     showToast('Вы вышли из аккаунта', 'success');
 }
 
-// --- МОДАЛЬНОЕ ОКНО ---
-window.openRatingModal = function(trackId) {
-    const track = allTracksData.find(t => t.id === trackId);
-    if (!track) return;
-
-    ratingTrackId = trackId;
-    document.getElementById('modal-track-title').innerText = track.title;
-    document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation';
-    
-    const coverImg = document.getElementById('modal-track-cover');
-    if(track.cover_url) {
-        coverImg.src = track.cover_url;
-        coverImg.style.display = 'block';
-    } else {
-        coverImg.style.display = 'none';
-    }
-
-    for(let i=1; i<=5; i++) {
-        document.getElementById(`crit-${i}`).value = 3;
-        document.getElementById(`val-crit-${i}`).innerText = '3 / 6';
-    }
-    updateTotalScore();
-    document.getElementById('rating-modal').classList.remove('hidden');
-}
-
-window.closeRatingModal = function() {
-    document.getElementById('rating-modal').classList.add('hidden');
-    ratingTrackId = null;
-}
-
-window.updateTotalScore = function() {
-    let total = 0;
-    for(let i=1; i<=5; i++) {
-        const val = parseInt(document.getElementById(`crit-${i}`).value);
-        document.getElementById(`val-crit-${i}`).innerText = `${val} / 6`;
-        total += val;
-    }
-    document.getElementById('modal-total-score').innerText = total;
-}
-
-window.submitRating = async function() {
-    if (!ratingTrackId) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        showToast('Чтобы ставить оценки, сначала войди или зарегистрируйся!', 'error');
-        closeRatingModal(); return;
-    }
-
-    let totalScore = 0;
-    for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value);
-
-    const user = session.user;
-    const { error } = await supabase
-        .from('ratings')
-        .upsert({ user_id: user.id, track_id: ratingTrackId, score: totalScore }, { onConflict: 'user_id, track_id' });
-
-    if (error) {
-        showToast('Ошибка при сохранении: ' + error.message, 'error');
-    } else { 
-        showToast('Оценка успешно сохранена!', 'success');
-        closeRatingModal(); 
-        await loadData(); 
-    }
-}
-
-// --- ПЛЕЕР ---
+// --- ПЛЕЕР (Оптимизированный) ---
 window.playTrack = function(trackId) {
     const track = allTracksData.find(t => t.id === trackId);
     if (!track) return;
@@ -193,6 +127,7 @@ function updateGlobalPlayPauseIcon(isPlaying) {
     else { icon.innerHTML = `<path d="M8 5v14l11-7z"/>`; icon.classList.add('ml-1'); }
 }
 
+// Слушатели плеера
 globalAudio.addEventListener('timeupdate', () => {
     if (!globalAudio.duration) return;
     const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
@@ -218,6 +153,66 @@ window.seekGlobalAudio = function(value) { globalAudio.currentTime = value; }
 window.changeVolume = function(value) {
     globalAudio.volume = value;
     document.getElementById('volume-progress-bar').style.width = `${value * 100}%`;
+}
+
+// --- МОДАЛЬНОЕ ОКНО ОЦЕНКИ ---
+window.openRatingModal = function(trackId) {
+    const track = allTracksData.find(t => t.id === trackId);
+    if (!track) return;
+
+    ratingTrackId = trackId;
+    document.getElementById('modal-track-title').innerText = track.title;
+    document.getElementById('modal-track-artist').innerText = track.artist || 'TrueEstimation';
+    
+    const coverImg = document.getElementById('modal-track-cover');
+    if(track.cover_url) { coverImg.src = track.cover_url; coverImg.style.display = 'block'; } 
+    else { coverImg.style.display = 'none'; }
+
+    for(let i=1; i<=5; i++) {
+        document.getElementById(`crit-${i}`).value = 3;
+        document.getElementById(`val-crit-${i}`).innerText = '3 / 6';
+    }
+    updateTotalScore();
+    document.getElementById('rating-modal').classList.remove('hidden');
+}
+
+window.closeRatingModal = function() {
+    document.getElementById('rating-modal').classList.add('hidden');
+    ratingTrackId = null;
+}
+
+window.updateTotalScore = function() {
+    let total = 0;
+    for(let i=1; i<=5; i++) {
+        const val = parseInt(document.getElementById(`crit-${i}`).value);
+        document.getElementById(`val-crit-${i}`).innerText = `${val} / 6`;
+        total += val;
+    }
+    document.getElementById('modal-total-score').innerText = total;
+}
+
+window.submitRating = async function() {
+    if (!ratingTrackId) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        showToast('Сначала войди в профиль!', 'error');
+        closeRatingModal(); return;
+    }
+
+    let totalScore = 0;
+    for(let i=1; i<=5; i++) totalScore += parseInt(document.getElementById(`crit-${i}`).value);
+
+    const user = session.user;
+    const { error } = await supabase
+        .from('ratings')
+        .upsert({ user_id: user.id, track_id: ratingTrackId, score: totalScore }, { onConflict: 'user_id, track_id' });
+
+    if (error) showToast('Ошибка: ' + error.message, 'error');
+    else { 
+        showToast('Оценка сохранена!', 'success');
+        closeRatingModal(); 
+        await loadData(); 
+    }
 }
 
 // --- ЗАГРУЗКА ДАННЫХ ---
@@ -246,7 +241,7 @@ async function loadData() {
         allTracksData.push({ ...track, avgScore: parseFloat(avgScore), votesCount });
     }
 
-    document.getElementById('stats-container').innerText = `Треков: ${allTracksData.length} | Оценок: ${totalGlobalVotes}`;
+    document.getElementById('stats-container').innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
     allTracksData.sort((a, b) => b.avgScore - a.avgScore);
 
     renderCategories(); 
@@ -260,9 +255,14 @@ function renderCategories() {
     const dynamicCategories = Array.from(new Set(allTracksData.map(t => t.category).filter(c => c && c !== 'Все')));
     const allCategories = [...baseCategories, ...dynamicCategories];
 
-    allCategories.forEach(cat => {
+    // Подсветка активного таба в навигации
+    document.getElementById('nav-main').className = currentCategory === 'Главное меню' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
+    document.getElementById('nav-all').className = currentCategory === 'Все' ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left' : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left';
+
+    // Рендер динамических категорий
+    dynamicCategories.forEach(cat => {
         const isActive = cat === currentCategory;
-        const btnClass = isActive ? 'bg-green-500 text-black font-bold' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white font-medium';
+        const btnClass = isActive ? 'bg-white/10 text-white font-bold' : 'text-gray-300 hover:text-white hover:bg-white/5 font-medium';
         container.innerHTML += `<button onclick="changeCategory('${cat}')" class="w-full text-left px-4 py-2.5 rounded-xl transition-all text-sm ${btnClass}">${cat}</button>`;
     });
 }
@@ -301,11 +301,10 @@ function renderHero() {
     const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-1" d="M8 5v14l11-7z"/>`;
 
     heroContainer.innerHTML = `
-        <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-8 md:p-12 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group">
+        <div class="relative bg-gradient-to-br from-green-900/40 to-gray-900/80 p-8 md:p-12 rounded-3xl border border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] overflow-hidden flex flex-col items-center text-center group mt-6">
             <div class="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-green-500/20 rounded-full blur-3xl"></div>
-            <div class="absolute bottom-0 left-0 -ml-32 -mb-32 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl"></div>
             
-            <div class="text-green-400 text-sm font-bold tracking-widest uppercase mb-6 flex items-center gap-2">
+            <div class="text-green-400 text-sm font-bold tracking-widest uppercase mb-6 flex items-center gap-2 z-10">
                 <span>🏆</span> Трек №1 на сайте <span>🏆</span>
             </div>
             
@@ -350,28 +349,37 @@ function renderTracksList() {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
         const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
 
+        // Строка списка (как в Яндексе)
         const trackHTML = `
-            <div class="bg-white/5 backdrop-blur-sm p-3 md:p-4 rounded-2xl border border-white/10 hover:border-green-500/30 transition-all duration-300 shadow-xl group flex items-center justify-between gap-4">
+            <div class="group flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default">
+                
                 <div class="flex items-center gap-4 flex-1 min-w-0">
-                    <button onclick="playTrack(${track.id})" class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-lg">
-                        <svg class="w-5 h-5 card-play-icon card-icon-${track.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+                    <!-- Кнопка Play -->
+                    <button onclick="playTrack(${track.id})" class="w-10 h-10 flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
+                        <svg class="w-6 h-6 card-play-icon card-icon-${track.id}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
                     </button>
+
+                    <!-- Обложка -->
                     ${track.cover_url 
-                        ? `<img src="${track.cover_url}" class="w-12 h-12 rounded-lg object-cover shadow-lg shrink-0 hidden md:block">` 
-                        : `<div class="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center shadow-lg shrink-0 hidden md:flex"><svg class="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
+                        ? `<img src="${track.cover_url}" class="w-10 h-10 rounded-md object-cover shadow-sm shrink-0">` 
+                        : `<div class="w-10 h-10 rounded-md bg-gray-800 flex items-center justify-center shrink-0"><svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
                     }
-                    <div class="flex-1 min-w-0">
-                        <h2 class="text-lg font-bold tracking-tight truncate">${track.title}</h2>
-                        <p class="text-sm text-gray-400 truncate">${track.artist ? track.artist : 'TrueEstimation'}</p>
+                    
+                    <!-- Название и Исполнитель -->
+                    <div class="flex-1 min-w-0 flex flex-col justify-center">
+                        <h2 class="text-sm font-bold truncate">${track.title}</h2>
+                        <p class="text-xs text-gray-400 truncate">${track.artist || 'TrueEstimation'}</p>
                     </div>
                 </div>
                 
-                <div class="flex items-center gap-4">
-                    <div class="text-right hidden sm:block">
-                        <div class="text-yellow-400 font-extrabold text-lg">⭐ ${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-xs text-gray-500 font-medium">/ 30</span></div>
-                        <div class="text-[10px] text-gray-400">${track.votesCount} оценок</div>
+                <!-- Рейтинг и Кнопка -->
+                <div class="flex items-center gap-6 pr-4">
+                    <div class="text-center hidden md:block">
+                        <div class="text-yellow-400 font-bold text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[10px] text-gray-500 font-medium">/ 30</span></div>
+                        <div class="text-[10px] text-gray-500">${track.votesCount} оценок</div>
                     </div>
-                    <button onclick="openRatingModal(${track.id})" class="bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95">Оценить</button>
+                    
+                    <button onclick="openRatingModal(${track.id})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100">Оценить</button>
                 </div>
             </div>
         `;
@@ -379,4 +387,5 @@ function renderTracksList() {
     }
 }
 
+// Инициализация
 loadData();
