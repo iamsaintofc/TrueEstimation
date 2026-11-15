@@ -16,7 +16,7 @@
                 radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
         }
         
-        /* --- ИДЕАЛЬНЫЕ ПОЛЗУНКИ (Chrome/Safari/Edge) --- */
+        /* --- ИДЕАЛЬНЫЕ ПОЛЗУНКИ --- */
         input[type=range] {
             -webkit-appearance: none;
             width: 100%;
@@ -28,26 +28,25 @@
         
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
-            height: 4px; /* Высота полосы */
+            height: 4px;
             cursor: pointer;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 2px;
         }
         input[type=range]::-webkit-slider-thumb {
-            height: 16px; /* Высота кружка */
+            height: 16px;
             width: 16px;
             border-radius: 50%;
             background: #22c55e;
             cursor: pointer;
             -webkit-appearance: none;
-            /* ИДЕАЛЬНАЯ ЦЕНТРОВКА: (4px полоса - 16px кружок) / 2 = -6px */
+            /* Точная центровка */
             margin-top: -6px; 
             box-shadow: 0 0 8px rgba(34,197,94,0.6);
             transition: transform 0.1s;
         }
         input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
 
-        /* --- ИДЕАЛЬНЫЕ ПОЛЗУНКИ (Firefox) --- */
         input[type=range]::-moz-range-track {
             width: 100%;
             height: 4px;
@@ -131,15 +130,14 @@
         <!-- ПРАВАЯ ЧАСТЬ -->
         <main class="flex-1 overflow-y-auto p-8 relative flex flex-col">
             
-            <!-- Статистика (Теперь ровно в потоке) -->
-            <div class="flex justify-end mb-4">
+            <div class="flex justify-end mb-2">
                 <div id="stats-container" class="text-xs font-medium text-gray-400 bg-black/30 px-3 py-1 rounded-full border border-white/5">
                     Загрузка...
                 </div>
             </div>
 
-            <!-- Hero (Главное меню) -->
-            <div id="hero-container" class="hidden mb-10 flex-1"></div>
+            <!-- Hero (Главное меню) - Уменьшен и вписан в экран -->
+            <div id="hero-container" class="hidden flex-1 items-center justify-center overflow-y-auto pb-20"></div>
 
             <!-- Список треков -->
             <div id="list-view-container" class="flex-1">
@@ -163,39 +161,42 @@
     <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР -->
     <div id="global-player" class="fixed bottom-0 left-0 right-0 h-24 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 px-6 z-40 hidden flex items-center justify-between">
         
-        <!-- Левая часть -->
-        <div class="flex items-center gap-4 w-1/4 min-w-[200px]">
-            <img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg" onerror="this.style.display='none'">
+        <!-- Левая часть (Клик по всей левой части = Предыдущий трек) -->
+        <div onclick="playPrev()" class="flex items-center gap-4 w-1/4 min-w-[200px] cursor-pointer group">
+            <img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg group-hover:opacity-80 transition-opacity" onerror="this.style.display='none'">
             <div class="truncate">
-                <div id="player-title" class="font-bold text-sm truncate text-white">Название</div>
+                <div id="player-title" class="font-bold text-sm truncate text-white group-hover:text-green-400 transition-colors">Название</div>
                 <div id="player-artist" class="text-xs text-gray-400 truncate">Исполнитель</div>
             </div>
         </div>
 
-        <!-- Центральная часть (Кнопки и Прогресс) -->
+        <!-- Центральная часть -->
         <div class="flex-1 max-w-2xl flex flex-col items-center gap-2">
-            <div class="flex items-center gap-6">
-                <!-- Кнопка Назад -->
-                <button onclick="playPrev()" class="text-gray-400 hover:text-white transition-colors">
+            <div class="flex items-center gap-8">
+                <!-- Огромная зона клика для Назад -->
+                <div onclick="playPrev()" class="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </div>
+                
+                <!-- Кнопка Play -->
+                <button id="global-play-btn" onclick="toggleGlobalPlay()" class="w-12 h-12 flex items-center justify-center bg-white text-black hover:scale-105 rounded-full transition-transform active:scale-95 shadow-lg">
+                    <svg id="global-play-icon" class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 </button>
                 
-                <!-- Кнопка Play (с оптическим центрированием) -->
-                <button id="global-play-btn" onclick="toggleGlobalPlay()" class="w-11 h-11 flex items-center justify-center bg-white text-black hover:scale-105 rounded-full transition-transform active:scale-95 shadow-lg">
-                    <svg id="global-play-icon" class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </button>
-                
-                <!-- Кнопка Вперед -->
-                <button onclick="playNext()" class="text-gray-400 hover:text-white transition-colors">
+                <!-- Огромная зона клика для Вперед -->
+                <div onclick="playNext()" class="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-400 hover:text-white transition-colors">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M16 18h2V6h-2zM6 18l8.5-6L6 6z"/></svg>
-                </button>
+                </div>
             </div>
             
             <div class="flex items-center gap-3 w-full">
                 <span id="global-current-time" class="text-[11px] text-gray-400 w-9 text-right font-medium">0:00</span>
-                <div class="flex-1 h-1 bg-white/20 rounded-full relative cursor-pointer group">
-                    <div id="global-progress-bar" class="absolute h-full bg-green-500 rounded-full w-0"></div>
-                    <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                <!-- Расширенная зона клика для прогресса -->
+                <div class="flex-1 h-4 flex items-center relative cursor-pointer group">
+                    <div class="w-full h-1 bg-white/20 rounded-full relative">
+                        <div id="global-progress-bar" class="absolute h-full bg-green-500 rounded-full w-0"></div>
+                        <input type="range" id="global-slider" min="0" max="100" value="0" step="1" oninput="seekGlobalAudio(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    </div>
                 </div>
                 <span id="global-duration" class="text-[11px] text-gray-400 w-9 font-medium">0:00</span>
             </div>
@@ -203,19 +204,22 @@
 
         <!-- Правая часть (Громкость) -->
         <div class="w-1/4 flex justify-end items-center gap-3 min-w-[150px]">
-            <button onclick="toggleMute()" id="volume-icon-btn" class="text-gray-400 hover:text-white transition-colors">
+            <button onclick="toggleMute()" id="volume-icon-btn" class="text-gray-400 hover:text-white transition-colors p-2">
                 <svg id="volume-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
             </button>
-            <div class="w-24 h-1 bg-white/20 rounded-full relative cursor-pointer">
-                <div id="volume-progress-bar" class="absolute h-full bg-green-500 rounded-full w-[100%]"></div>
-                <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+            <!-- Расширенная зона клика для громкости -->
+            <div class="w-24 h-6 flex items-center relative cursor-pointer group">
+                <div class="w-full h-1 bg-white/20 rounded-full relative">
+                    <div id="volume-progress-bar" class="absolute h-full bg-green-500 rounded-full w-[100%]"></div>
+                    <input type="range" id="global-volume-slider" min="0" max="1" step="0.01" value="1" oninput="changeVolume(this.value)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ВХОДА -->
-    <div id="login-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-gray-800/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] relative">
+    <!-- МОДАЛЬНОЕ ОКНО ВХОДА (Прозрачное) -->
+    <div id="login-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
@@ -228,9 +232,10 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ (Прозрачное) -->
-    <div id="rating-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-gray-800/90 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.6)] relative">
+    <!-- МОДАЛЬНОЕ ОКНО ОЦЕНКИ (Прозрачное - Glassmorphism) -->
+    <div id="rating-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <!-- Задний фон сделан полупрозрачным с сильным блюром -->
+        <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
             <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
