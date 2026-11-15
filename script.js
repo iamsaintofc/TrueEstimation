@@ -62,6 +62,9 @@ async function initApp() {
     } catch (err) {
         console.error("Init Error:", err);
         showToast("Ошибка при запуске: " + err.message, 'error');
+        // Принудительно убираем загрузку в случае фатальной ошибки
+        const statsEl = document.getElementById('stats-container');
+        if(statsEl) statsEl.innerText = `Ошибка базы данных`;
     }
 }
 initApp();
@@ -578,38 +581,37 @@ window.deleteReply = function(replyId) {
 window.changeSort = function(sortType) { currentSort = sortType; renderView(); }
 window.changeCommentsSort = function(sortType) { currentCommentsSort = sortType; renderCommentsView(); }
 
-// --- ЗАГРУЗКА ДАННЫХ (ПОЛНОСТЬЮ ЗАЩИЩЕНА ОТ ПАДЕНИЙ) ---
+// --- ЗАГРУЗКА ДАННЫХ (ПОШАГОВАЯ, С ЗАЩИТОЙ ОТ ЗАВИСАНИЙ) ---
 async function loadData() {
     try {
-        const results = await Promise.allSettled([
-            supabase.from('tracks').select('*'),
-            supabase.from('ratings').select('*'),
-            supabase.from('track_likes').select('*'),
-            supabase.from('comment_likes').select('*'),
-            supabase.from('profiles').select('*'),
-            supabase.from('replies').select('*'),
-            supabase.from('reply_likes').select('*'),
-            currentUserId ? supabase.from('playlists').select('*').eq('user_id', currentUserId) : Promise.resolve({data: [], error: null}),
-            currentUserId ? supabase.from('playlist_tracks').select('*') : Promise.resolve({data: [], error: null})
-        ]);
+        console.log("=== START LOAD DATA ===");
+        const statsEl = document.getElementById('stats-container');
+        if(statsEl) statsEl.innerText = "Загрузка...";
 
-        const getData = (index) => {
-            const res = results[index];
-            if (res.status === 'fulfilled' && res.value && res.value.data) return res.value.data;
-            if (res.status === 'rejected') console.error("Promise rejected:", res.reason);
-            if (res.status === 'fulfilled' && res.value && res.value.error) console.error("Supabase error:", res.value.error);
-            return [];
-        };
+        let tracks = [], ratings = [], trackLikes = [], commentLikes = [], profiles = [], replies = [], replyLikes = [], playlists = [], playlistTracks = [];
 
-        const tracks = getData(0);
-        const ratings = getData(1);
-        const trackLikes = getData(2);
-        const commentLikes = getData(3);
-        allProfilesData = getData(4);
-        allRepliesData = getData(5);
-        const replyLikes = getData(6);
-        userPlaylists = getData(7);
-        allPlaylistTracksData = getData(8);
+        // Каждый запрос в своем try/catch. Если один упадет - остальные загрузятся.
+        try { const { data } = await supabase.from('tracks').select('*'); tracks = data || []; } catch (e) { console.error("Tracks error:", e); }
+        try { const { data } = await supabase.from('ratings').select('*'); ratings = data || []; } catch (e) { console.error("Ratings error:", e); }
+        try { const { data } = await supabase.from('track_likes').select('*'); trackLikes = data || []; } catch (e) { console.error("Track likes error:", e); }
+        try { const { data } = await supabase.from('comment_likes').select('*'); commentLikes = data || []; } catch (e) { console.error("Comment likes error:", e); }
+        try { const { data } = await supabase.from('profiles').select('*'); profiles = data || []; allProfilesData = profiles; } catch (e) { console.error("Profiles error:", e); }
+        try { const { data } = await supabase.from('replies').select('*'); replies = data || []; allRepliesData = replies; } catch (e) { console.error("Replies error:", e); }
+        try { const { data } = await supabase.from('reply_likes').select('*'); replyLikes = data || []; } catch (e) { console.error("Reply likes error:", e); }
+        
+        if (currentUserId) {
+            try { const { data } = await supabase.from('playlists').select('*').eq('user_id', currentUserId); playlists = data || []; userPlaylists = playlists; } catch (e) { console.error("Playlists error:", e); }
+            try { const { data } = await supabase.from('playlist_tracks').select('*'); playlistTracks = data || []; allPlaylistTracksData = playlistTracks; } catch (e) { console.error("Playlist tracks error:", e); }
+        }
+
+        console.log("=== DATA FETCHED ===");
+
+        if (!Array.isArray(tracks)) tracks = [];
+        if (!Array.isArray(ratings)) ratings = [];
+        if (!Array.isArray(trackLikes)) trackLikes = [];
+        if (!Array.isArray(commentLikes)) commentLikes = [];
+        if (!Array.isArray(replies)) replies = [];
+        if (!Array.isArray(replyLikes)) replyLikes = [];
 
         const ratingsByTrack = new Map(); 
         ratings.forEach(r => { if (!ratingsByTrack.has(r.track_id)) ratingsByTrack.set(r.track_id, []); ratingsByTrack.get(r.track_id).push(r); });
@@ -651,20 +653,20 @@ async function loadData() {
                     const cLikes = likesByComment.get(r.id) || []; 
                     const track = tracks.find(t => t.id === r.track_id);
                     const profile = allProfilesData.find(p => p.id === r.user_id) || { username: 'User', avatar_url: null, avatar_bg: '#1e293b', is_admin: false };
-                    const replies = allRepliesData.filter(rep => rep.rating_id === r.id).map(rep => {
+                    const repliesArr = replies.filter(rep => rep.rating_id === r.id).map(rep => {
                         const repProfile = allProfilesData.find(p => p.id === rep.user_id) || { username: 'User', avatar_url: null, avatar_bg: '#1e293b', is_admin: false };
                         const repLikes = likesByReply.get(rep.id) || [];
                         return { ...rep, username: repProfile.username, avatar_url: repProfile.avatar_url, avatar_bg: repProfile.avatar_bg, isAdmin: repProfile.is_admin, isOwn: (currentUserId && currentUserId === rep.user_id) || !!isAdmin, likesCount: repLikes.length, userLiked: currentUserId ? repLikes.includes(currentUserId) : false };
                     });
-                    allCommentsData.push({ ...r, likesCount: cLikes.length, userLiked: currentUserId ? cLikes.includes(currentUserId) : false, trackTitle: track ? track.title : 'Неизвестный трек', trackArtist: track ? track.artist : '', trackCover: track ? track.cover_url : '', isOwn: (currentUserId && currentUserId === r.user_id) || !!isAdmin, isAdmin: profile.is_admin, username: profile.username, avatar_url: profile.avatar_url, avatar_bg: profile.avatar_bg, replies: replies });
+                    allCommentsData.push({ ...r, likesCount: cLikes.length, userLiked: currentUserId ? cLikes.includes(currentUserId) : false, trackTitle: track ? track.title : 'Неизвестный трек', trackArtist: track ? track.artist : '', trackCover: track ? track.cover_url : '', isOwn: (currentUserId && currentUserId === r.user_id) || !!isAdmin, isAdmin: profile.is_admin, username: profile.username, avatar_url: profile.avatar_url, avatar_bg: profile.avatar_bg, replies: repliesArr });
                 }
             } catch (e) {
                 console.error("Error processing comment:", r, e);
             }
         }
 
-        const statsEl = document.getElementById('stats-container');
         if(statsEl) statsEl.innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
+        console.log("=== DATA PROCESSED. START RENDER ===");
         
         renderSidebarPlaylists();
         applyLanguage(); 
