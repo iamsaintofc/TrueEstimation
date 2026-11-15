@@ -39,12 +39,10 @@
             <button id="login-btn" onclick="openLoginModal()" class="bg-white text-black px-5 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">Войти</button>
             
             <div id="user-profile" class="hidden relative group">
-                <!-- Аватарка с уникальной обводкой для админа -->
                 <button id="header-avatar-btn" class="w-10 h-10 rounded-full bg-green-500 text-black font-extrabold flex items-center justify-center text-lg shadow-lg border-2 border-transparent hover:border-white transition-all overflow-hidden relative">
                     <span id="user-avatar-letter">U</span>
                     <img id="user-avatar-img" src="" class="w-full h-full object-cover hidden">
                 </button>
-                
                 <div class="absolute right-0 mt-2 w-56 bg-gray-800 rounded-xl shadow-2xl border border-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                     <div class="p-4 border-b border-white/10">
                         <div class="text-xs text-gray-400 mb-1">Вы вошли как:</div>
@@ -67,12 +65,7 @@
                 <button onclick="changeCategory('Главное меню')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-main"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Главное</button>
                 <button onclick="changeCategory('Все')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-all"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>Все треки</button>
                 <button onclick="changeCategory('Комментарии')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-comments"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>Комментарии</button>
-                
-                <!-- Кнопка Админа (скрыта по умолчанию) -->
-                <button onclick="changeCategory('AdminPanel')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left hidden" id="nav-admin">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                    Админ-панель
-                </button>
+                <button onclick="changeCategory('AdminPanel')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left hidden" id="nav-admin"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>Админ-панель</button>
             </nav>
 
             <div class="mt-2 mb-6">
@@ -83,8 +76,8 @@
                 </div>
             </div>
 
+            <!-- Убрал заголовок "Категории" -->
             <div class="mt-2">
-                <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-3 px-4">Категории</h3>
                 <div id="categories-container" class="space-y-1"></div>
             </div>
         </aside>
@@ -102,17 +95,13 @@
                     <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2" id="sort-container">
                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
                         <select id="sort-select" onchange="changeSort(this.value)" class="bg-transparent text-sm font-medium text-gray-300 outline-none cursor-pointer">
-                            <option value="rating" class="bg-gray-800">По рейтингу</option>
-                            <option value="newest" class="bg-gray-800">По новизне</option>
-                            <option value="popular" class="bg-gray-800">По популярности</option>
-                            <option value="likes" class="bg-gray-800">По лайкам</option>
+                            <option value="rating" class="bg-gray-800">По рейтингу</option><option value="newest" class="bg-gray-800">По новизне</option><option value="popular" class="bg-gray-800">По популярности</option><option value="likes" class="bg-gray-800">По лайкам</option>
                         </select>
                     </div>
                 </div>
                 
                 <div class="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-4 border-b border-white/5 pb-2">
-                    <div class="w-10 shrink-0"></div><div class="w-12 shrink-0"></div><div class="flex-1">Название</div>
-                    <div class="w-24 text-center shrink-0">Рейтинг</div><div class="w-28 text-center shrink-0">Действия</div><div class="w-24 text-right shrink-0">Оценить</div>
+                    <div class="w-10 shrink-0"></div><div class="w-12 shrink-0"></div><div class="flex-1">Название</div><div class="w-24 text-center shrink-0">Рейтинг</div><div class="w-28 text-center shrink-0">Действия</div><div class="w-24 text-right shrink-0">Оценить</div>
                 </div>
                 <div id="tracks-container" class="space-y-1 pb-24"></div>
             </div>
@@ -130,31 +119,20 @@
                 <div id="comments-list" class="space-y-4 pb-24 max-w-4xl"></div>
             </div>
 
-            <!-- АДМИН ПАНЕЛЬ -->
             <div id="admin-view-container" class="hidden flex-1">
                 <h2 class="text-3xl font-extrabold mb-6 tracking-tight text-red-500">Управление пользователями</h2>
                 <div class="bg-white/5 border border-white/10 rounded-2xl overflow-hidden max-w-4xl">
                     <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-black/40 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400">
-                                <th class="p-4 font-bold">Пользователь</th>
-                                <th class="p-4 font-bold">Email</th>
-                                <th class="p-4 font-bold">Статус</th>
-                                <th class="p-4 font-bold text-right">Действие</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-users-list">
-                            <!-- Сюда рендерятся юзеры -->
-                        </tbody>
+                        <thead><tr class="bg-black/40 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400"><th class="p-4 font-bold">Пользователь</th><th class="p-4 font-bold">Email</th><th class="p-4 font-bold">Статус</th><th class="p-4 font-bold text-right">Действие</th></tr></thead>
+                        <tbody id="admin-users-list"></tbody>
                     </table>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- ГЛОБАЛЬНЫЙ ПЛЕЕР (без изменений, оставил как было) -->
+    <!-- Плеер, модалки и прочее оставляем как в прошлом сообщении, они не изменились -->
     <div id="global-player" class="fixed bottom-0 left-0 right-0 h-24 bg-gray-900/95 backdrop-blur-xl border-t border-white/10 px-4 md:px-6 z-40 hidden flex items-center justify-between">
-        <!-- ... плеер ... -->
         <div class="flex items-center gap-4 w-1/4 min-w-[200px] p-2 rounded-xl">
             <div onclick="openCoverModal()" class="cursor-pointer hover:opacity-80 transition-opacity shrink-0"><img id="player-cover" src="" class="w-14 h-14 rounded-md object-cover shadow-lg" onerror="this.style.display='none'"></div>
             <div class="truncate"><div id="player-title" class="font-bold text-sm truncate text-white">Название</div><div id="player-artist" class="text-xs text-gray-400 truncate">Исполнитель</div></div>
@@ -179,74 +157,12 @@
         </div>
     </div>
 
-    <!-- МОДАЛКИ (Вход, Настройки, Оценка, Подтверждение) - Оставил как в прошлой версии -->
-    <!-- Вставь блоки модалок из предыдущего сообщения сюда -->
-    
-    <div id="login-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
-            <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            <h3 class="text-2xl font-extrabold mb-6 text-center">Вход в систему</h3>
-            <div class="space-y-4">
-                <input type="email" id="login-email" placeholder="Email" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm">
-                <input type="password" id="login-password" placeholder="Пароль" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm">
-                <button onclick="handleLogin()" class="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-colors shadow-lg active:scale-95">Войти / Регистрация</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="profile-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-gray-900 border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl relative">
-            <button onclick="closeProfileModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            <h3 class="text-2xl font-extrabold mb-6 text-center">Настройки профиля</h3>
-            <div class="space-y-4">
-                <div><label class="block text-sm text-gray-400 mb-1">Никнейм</label><input type="text" id="settings-username" placeholder="Твой ник" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"></div>
-                <div><label class="block text-sm text-gray-400 mb-1">Ссылка на аватарку (URL)</label><input type="text" id="settings-avatar" placeholder="https://..." class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"></div>
-                <div class="flex justify-center py-2">
-                    <div class="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center overflow-hidden border-2 border-white/20">
-                        <img id="settings-avatar-preview" src="" class="w-full h-full object-cover hidden"><span id="settings-avatar-letter" class="text-black font-extrabold text-3xl">U</span>
-                    </div>
-                </div>
-                <button onclick="saveProfile()" class="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-colors shadow-lg active:scale-95 mt-2">Сохранить</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="rating-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-black/50 backdrop-blur-3xl border border-white/20 rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative max-h-[95vh] overflow-y-auto custom-scrollbar">
-            <button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            <div class="flex items-center gap-5 mb-6 z-10 relative">
-                <img id="modal-track-cover" src="" class="w-24 h-24 rounded-2xl object-cover shadow-2xl border border-white/20">
-                <div><h3 class="text-2xl font-extrabold mb-1 line-clamp-1" id="modal-track-title">Название</h3><p class="text-gray-400 font-medium" id="modal-track-artist">Исполнитель</p></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 z-10 relative">
-                <div class="space-y-4">
-                    <div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Текст и смысл</span><span id="val-crit-1" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div>
-                    <div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Бит и ритмика</span><span id="val-crit-2" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div>
-                    <div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Сведение и мастеринг</span><span id="val-crit-3" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div>
-                </div>
-                <div class="space-y-4">
-                    <div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Вайб и атмосфера</span><span id="val-crit-4" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div>
-                    <div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Оригинальность</span><span id="val-crit-5" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div>
-                    <div><span class="text-gray-300 font-semibold text-sm block mb-2">Общее впечатление о треке</span><textarea id="rating-comment" rows="3" placeholder="Поделись своим мнением..." class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm resize-none"></textarea></div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between border-t border-white/10 pt-6 z-10 relative">
-                <div class="flex items-baseline gap-2"><span class="text-gray-400 text-sm font-medium">Итог:</span><span id="modal-total-score" class="text-4xl font-extrabold text-white">15</span><span class="text-gray-500 font-bold">/ 30</span></div>
-                <div class="flex items-center gap-3"><button id="delete-rating-btn" onclick="promptDeleteRating()" class="hidden text-red-400 hover:text-red-300 px-4 py-3 rounded-xl font-bold transition-colors text-sm">Удалить</button><button onclick="submitRating()" class="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-xl font-bold transition-transform active:scale-95 shadow-lg">Сохранить</button></div>
-            </div>
-        </div>
-    </div>
-
+    <!-- МОДАЛКИ (Вход, Настройки, Оценка, Лайтбокс, Подтверждение) -->
+    <div id="login-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4"><div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] relative"><button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><h3 class="text-2xl font-extrabold mb-6 text-center">Вход в систему</h3><div class="space-y-4"><input type="email" id="login-email" placeholder="Email" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"><input type="password" id="login-password" placeholder="Пароль" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"><button onclick="handleLogin()" class="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-colors shadow-lg active:scale-95">Войти / Регистрация</button></div></div></div>
+    <div id="profile-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md z-50 hidden flex items-center justify-center p-4"><div class="bg-gray-900 border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl relative"><button onclick="closeProfileModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><h3 class="text-2xl font-extrabold mb-6 text-center">Настройки профиля</h3><div class="space-y-4"><div><label class="block text-sm text-gray-400 mb-1">Никнейм</label><input type="text" id="settings-username" placeholder="Твой ник" class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"></div><div><label class="block text-sm text-gray-400 mb-1">Ссылка на аватарку (URL)</label><input type="text" id="settings-avatar" placeholder="https://..." class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm"></div><div class="flex justify-center py-2"><div class="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center overflow-hidden border-2 border-white/20"><img id="settings-avatar-preview" src="" class="w-full h-full object-cover hidden"><span id="settings-avatar-letter" class="text-black font-extrabold text-3xl">U</span></div></div><button onclick="saveProfile()" class="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-colors shadow-lg active:scale-95 mt-2">Сохранить</button></div></div></div>
+    <div id="rating-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4"><div class="bg-black/50 backdrop-blur-3xl border border-white/20 rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] relative max-h-[95vh] overflow-y-auto custom-scrollbar"><button onclick="closeRatingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-all z-20"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><div class="flex items-center gap-5 mb-6 z-10 relative"><img id="modal-track-cover" src="" class="w-24 h-24 rounded-2xl object-cover shadow-2xl border border-white/20"><div><h3 class="text-2xl font-extrabold mb-1 line-clamp-1" id="modal-track-title">Название</h3><p class="text-gray-400 font-medium" id="modal-track-artist">Исполнитель</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 z-10 relative"><div class="space-y-4"><div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Текст и смысл</span><span id="val-crit-1" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-1" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div><div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Бит и ритмика</span><span id="val-crit-2" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-2" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div><div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Сведение и мастеринг</span><span id="val-crit-3" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-3" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div></div><div class="space-y-4"><div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Вайб и атмосфера</span><span id="val-crit-4" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-4" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div><div><div class="flex justify-between text-sm mb-1"><span class="text-gray-300 font-semibold">Оригинальность</span><span id="val-crit-5" class="text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">3 / 6</span></div><input type="range" id="crit-5" min="1" max="6" value="3" oninput="updateTotalScore()" class="rating-slider"></div><div><span class="text-gray-300 font-semibold text-sm block mb-2">Общее впечатление о треке</span><textarea id="rating-comment" rows="3" placeholder="Поделись своим мнением..." class="w-full bg-black/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-green-500 text-sm resize-none"></textarea></div></div></div><div class="flex items-center justify-between border-t border-white/10 pt-6 z-10 relative"><div class="flex items-baseline gap-2"><span class="text-gray-400 text-sm font-medium">Итог:</span><span id="modal-total-score" class="text-4xl font-extrabold text-white">15</span><span class="text-gray-500 font-bold">/ 30</span></div><div class="flex items-center gap-3"><button id="delete-rating-btn" onclick="promptDeleteRating()" class="hidden text-red-400 hover:text-red-300 px-4 py-3 rounded-xl font-bold transition-colors text-sm">Удалить</button><button onclick="submitRating()" class="bg-green-500 hover:bg-green-400 text-black px-8 py-3 rounded-xl font-bold transition-transform active:scale-95 shadow-lg">Сохранить</button></div></div></div></div>
     <div id="cover-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4 transition-all duration-300" onclick="closeCoverModal()"><img id="cover-modal-img" src="" class="max-w-full max-h-[90vh] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] object-contain border border-white/10" onclick="event.stopPropagation()"></div>
-
-    <div id="confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[80] hidden flex items-center justify-center p-4">
-        <div class="bg-gray-900 border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative text-center">
-            <div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></div>
-            <h3 class="text-xl font-extrabold mb-2">Удалить?</h3><p id="confirm-text" class="text-sm text-gray-400 mb-6">Ты уверен?</p>
-            <div class="flex items-center justify-center gap-3"><button onclick="closeConfirmModal()" class="flex-1 px-4 py-2.5 rounded-xl font-bold text-gray-300 hover:bg-white/5 transition-colors">Отмена</button><button onclick="executeConfirm()" class="flex-1 px-4 py-2.5 rounded-xl font-bold bg-red-500 hover:bg-red-400 text-white transition-colors shadow-lg active:scale-95">Удалить</button></div>
-        </div>
-    </div>
-
+    <div id="confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[80] hidden flex items-center justify-center p-4"><div class="bg-gray-900 border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative text-center"><div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></div><h3 class="text-xl font-extrabold mb-2">Удалить?</h3><p id="confirm-text" class="text-sm text-gray-400 mb-6">Ты уверен?</p><div class="flex items-center justify-center gap-3"><button onclick="closeConfirmModal()" class="flex-1 px-4 py-2.5 rounded-xl font-bold text-gray-300 hover:bg-white/5 transition-colors">Отмена</button><button onclick="executeConfirm()" class="flex-1 px-4 py-2.5 rounded-xl font-bold bg-red-500 hover:bg-red-400 text-white transition-colors shadow-lg active:scale-95">Удалить</button></div></div></div>
     <div id="toast-container" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
     <script type="module" src="script.js"></script>
 </body>
