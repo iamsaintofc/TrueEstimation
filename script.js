@@ -68,7 +68,6 @@ window.playTrack = function(trackId) {
 
     document.getElementById('global-player').classList.remove('hidden');
     document.getElementById('player-title').innerText = track.title;
-    // Выводим исполнителя, если он есть в базе, иначе дефолтный текст
     document.getElementById('player-artist').innerText = track.artist ? track.artist : 'TrueEstimation';
     
     const coverImg = document.getElementById('player-cover');
@@ -79,11 +78,18 @@ window.playTrack = function(trackId) {
         coverImg.style.display = 'none';
     }
 
+    // Сбрасываем иконки на всех карточках в списке
     document.querySelectorAll('.card-play-icon').forEach(icon => {
         icon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+        icon.classList.add('ml-0.5'); // Небольшой сдвиг для ровного треугольника
     });
+    
+    // Включаем иконку Pause на активной
     const activeCardIcon = document.getElementById(`card-icon-${trackId}`);
-    if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+    if(activeCardIcon) {
+        activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+        activeCardIcon.classList.remove('ml-0.5');
+    }
 
     updateGlobalPlayPauseIcon(true);
 }
@@ -95,12 +101,18 @@ window.toggleGlobalPlay = function() {
         globalAudio.play();
         updateGlobalPlayPauseIcon(true);
         const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
-        if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+        if(activeCardIcon) {
+            activeCardIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+            activeCardIcon.classList.remove('ml-0.5');
+        }
     } else {
         globalAudio.pause();
         updateGlobalPlayPauseIcon(false);
         const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
-        if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+        if(activeCardIcon) {
+            activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+            activeCardIcon.classList.add('ml-0.5');
+        }
     }
 }
 
@@ -108,8 +120,10 @@ function updateGlobalPlayPauseIcon(isPlaying) {
     const icon = document.getElementById('global-play-icon');
     if (isPlaying) {
         icon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+        icon.classList.remove('ml-1');
     } else {
         icon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+        icon.classList.add('ml-1'); // Сдвигаем треугольник для визуального центрирования
     }
 }
 
@@ -133,7 +147,10 @@ globalAudio.addEventListener('ended', () => {
     document.getElementById('global-current-time').innerText = "0:00";
     
     const activeCardIcon = document.getElementById(`card-icon-${currentTrackId}`);
-    if(activeCardIcon) activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+    if(activeCardIcon) {
+        activeCardIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+        activeCardIcon.classList.add('ml-0.5');
+    }
 });
 
 window.seekGlobalAudio = function(value) {
@@ -185,29 +202,31 @@ async function loadTracks() {
 
     for (const track of allTracksData) {
         const isPlayingThis = currentTrackId === track.id && !globalAudio.paused;
-        const iconPath = isPlayingThis ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` : `<path d="M8 5v14l11-7z"/>`;
-
-        // Добавили вывод исполнителя (artist) под названием
+        // Для треугольника Play добавляем класс ml-0.5 (сдвиг вправо на 2px) для ровного центра
+        const iconPath = isPlayingThis 
+            ? `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>` 
+            : `<path class="ml-0.5" d="M8 5v14l11-7z"/>`;
+        
+        // Кнопка "Слушать" переделана в круглую зеленую кнопку слева
         const trackHTML = `
-            <div class="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 hover:border-green-500/30 transition-all duration-300 shadow-xl group flex items-center justify-between gap-4">
+            <div class="bg-white/5 backdrop-blur-sm p-3 md:p-4 rounded-2xl border border-white/10 hover:border-green-500/30 transition-all duration-300 shadow-xl group flex items-center justify-between gap-4">
                 
                 <div class="flex items-center gap-4 flex-1 min-w-0">
+                    <!-- Зеленая кнопка Play -->
+                    <button onclick="playTrack(${track.id})" class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-green-500 hover:bg-green-400 text-black rounded-full transition-transform active:scale-95 shadow-lg">
+                        <svg id="card-icon-${track.id}" class="w-5 h-5 card-play-icon" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
+                    </button>
+
                     ${track.cover_url 
-                        ? `<img src="${track.cover_url}" class="w-14 h-14 rounded-lg object-cover shadow-lg shrink-0">` 
-                        : `<div class="w-14 h-14 rounded-lg bg-gray-800 flex items-center justify-center shadow-lg shrink-0"><svg class="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
+                        ? `<img src="${track.cover_url}" class="w-12 h-12 rounded-lg object-cover shadow-lg shrink-0 hidden md:block">` 
+                        : `<div class="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center shadow-lg shrink-0 hidden md:flex"><svg class="w-6 h-6 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`
                     }
                     
                     <div class="flex-1 min-w-0">
                         <h2 class="text-lg font-bold tracking-tight truncate">${track.title}</h2>
-                        <!-- Выводим исполнителя -->
                         <p class="text-sm text-gray-400 truncate mb-1">${track.artist ? track.artist : 'TrueEstimation'}</p>
                         
                         <div class="flex items-center gap-3 mt-1">
-                            <button onclick="playTrack(${track.id})" class="flex items-center gap-1.5 text-green-400 hover:text-green-300 transition-colors text-sm font-semibold">
-                                <svg id="card-icon-${track.id}" class="w-4 h-4 card-play-icon" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg>
-                                Слушать
-                            </button>
-                            
                             <div class="flex items-center gap-1 text-sm bg-black/30 px-2 py-0.5 rounded border border-white/5">
                                 <span class="text-yellow-400">⭐</span>
                                 <span class="font-bold">${track.avgScore > 0 ? track.avgScore : '-'}</span>
