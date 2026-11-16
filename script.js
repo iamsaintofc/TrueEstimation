@@ -1027,7 +1027,7 @@ function renderTracksList() {
             const playlistIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>`;
             const shareIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>`;
 
-            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-32 md:w-40 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-cyan-300' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="queueTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-cyan-300 transition-colors ml-1" title="В очередь"><svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7m9-6v6m-3-3h6"/></svg></button><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
+            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0 tabular-nums leading-tight"><div class="text-yellow-400 font-bold text-xs md:text-sm whitespace-nowrap">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500 whitespace-nowrap">${track.votesCount} оц.</div></div><div class="w-32 md:w-40 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-cyan-300' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="queueTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-cyan-300 transition-colors ml-1" title="В очередь"><svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7m9-6v6m-3-3h6"/></svg></button><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
@@ -1806,16 +1806,17 @@ window.adminAddTrack = async function() {
     if (!isAdmin) return;
     const title = $id('add-track-title').value.trim(), artist = $id('add-track-artist').value.trim(), category = $id('add-track-category').value.trim();
     let audio_url = $id('add-track-audio').value.trim(), cover_url = $id('add-track-cover').value.trim();
+    const release_date = $id('add-track-release').value || null;
     const aFile = $id('add-track-audio-file').files[0], cFile = $id('add-track-cover-file').files[0];
     if (!title || (!audio_url && !aFile)) return showToast('Название и аудио обязательны', 'error');
     const btn = $id('add-track-btn'); btn.disabled = true; btn.classList.add('opacity-50'); btn.innerText = 'Загрузка…';
     try {
         if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
         if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
-        const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url });
+        const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url, release_date });
         if (error) throw error;
         showToast('Трек добавлен!', 'success');
-        ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover', 'add-track-audio-file', 'add-track-cover-file'].forEach(i => { $id(i).value = ''; });
+        ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover', 'add-track-release', 'add-track-audio-file', 'add-track-cover-file'].forEach(i => { $id(i).value = ''; });
         await loadData();
     } catch (e) { showToast('Ошибка: ' + (e.message || e), 'error'); }
     finally { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerText = 'Добавить трек'; }
@@ -1844,6 +1845,7 @@ window.openEditTrack = function(id) {
     $id('edit-track-category').value = t.category === 'Без категории' ? '' : t.category;
     $id('edit-track-audio').value = t.audio_url || ''; $id('edit-track-cover').value = t.cover_url || '';
     $id('edit-track-audio-file').value = ''; $id('edit-track-cover-file').value = '';
+    $id('edit-track-release').value = t.release_date ? String(t.release_date).slice(0, 10) : '';
     $id('edit-track-modal').classList.remove('hidden');
 }
 window.closeEditTrack = function() { $id('edit-track-modal').classList.add('hidden'); editingTrackId = null; }
@@ -1858,7 +1860,7 @@ window.saveTrackEdit = async function() {
         if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
         if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
         if (!audio_url) throw new Error('Нужна ссылка на аудио или файл');
-        const { error } = await supabase.from('tracks').update({ title, artist: $id('edit-track-artist').value.trim(), category: $id('edit-track-category').value.trim() || null, audio_url, cover_url: cover_url || null }).eq('id', t.id);
+        const { error } = await supabase.from('tracks').update({ title, artist: $id('edit-track-artist').value.trim(), category: $id('edit-track-category').value.trim() || null, audio_url, cover_url: cover_url || null, release_date: $id('edit-track-release').value || null }).eq('id', t.id);
         if (error) throw error;
         const old = [aFile && t.audio_url, cFile && t.cover_url].map(mediaPathFromUrl).filter(Boolean);
         if (old.length) supabase.storage.from(MEDIA_BUCKET).remove(old).catch(() => {});
@@ -1884,6 +1886,17 @@ async function loadBanLog() {
     if (!isAdmin) return;
     const { data, error } = await supabase.from('ban_log').select('*').order('created_at', { ascending: false }).limit(30);
     if (!error) { banLogData = data || []; renderBanLog(); }
+}
+window.clearBanLog = function() {
+    if (!isAdmin) return;
+    if (!banLogData.length) return showToast('Журнал уже пуст', 'success');
+    showConfirm('Удалить всю историю журнала банов? Это действие нельзя отменить. Сами баны останутся в силе.', async () => {
+        const { data, error } = await supabase.from('ban_log').delete().gte('id', 0).select('id');
+        if (error) return showToast('Ошибка: ' + error.message, 'error');
+        if (!data || !data.length) return showToast('Не удалось очистить. Выполни SQL-миграцию для журнала банов', 'error');
+        banLogData = []; renderBanLog();
+        showToast('Журнал очищен', 'success');
+    });
 }
 function renderBanLog() {
     const el = $id('admin-banlog-list'); if (!el) return;
