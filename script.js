@@ -33,6 +33,9 @@ let notifications = []; let notifChannel = null; let notifTimer = null; let noti
 let allRatingsData = []; let allCommentLikesData = []; let userLinkHandled = false;
 
 // --- ПЕРЕХВАТ ОШИБОК ---
+window.addEventListener('unhandledrejection', e => {
+    showToast('Ошибка: ' + ((e.reason && e.reason.message) || e.reason || 'неизвестная'), 'error');
+});
 window.onerror = function(message, source, lineno, colno, error) {
     const msg = `Ошибка JS: ${message} (строка ${lineno})`;
     showToast(msg, 'error');
@@ -601,7 +604,8 @@ window.saveProfile = async function() {
         if (fileInput.files.length > 0) {
             const file = fileInput.files[0]; const fileExt = file.name.split('.').pop(); const fileName = `${currentUserId}-${Date.now()}.${fileExt}`;
             showToast('Загрузка аватарки...', 'success');
-            const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file);
+            const imgMime = guessMime(file, 'image/jpeg');
+            const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file, { contentType: imgMime });
             if (uploadError) throw uploadError;
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
             avatarUrl = publicUrlData.publicUrl;
@@ -1817,13 +1821,42 @@ async function mergePrivateEmails() {
 // УПРАВЛЕНИЕ ТРЕКАМИ (добавление файлами, редактирование, удаление)
 // ==========================================
 const MEDIA_BUCKET = 'track-media';
+const MIME_BY_EXT = {
+    mp3:'audio/mpeg', wav:'audio/wav', ogg:'audio/ogg', oga:'audio/ogg', opus:'audio/opus',
+    m4a:'audio/mp4', aac:'audio/aac', flac:'audio/flac', webm:'audio/webm', wma:'audio/x-ms-wma',
+    mp4:'audio/mp4', amr:'audio/amr', mid:'audio/midi', midi:'audio/midi',
+    jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', webp:'image/webp', avif:'image/avif', svg:'image/svg+xml', bmp:'image/bmp'
+};
+function guessMime(file, fallback) {
+    // ВАЖНО: некоторые браузеры отдают файл как application/octet-stream (или пустой тип) —
+    // тогда storage записывает его с этим типом и политика RLS отклоняет загрузку.
+    if (file.type && file.type !== 'application/octet-stream') return file.type;
+    const ext = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return MIME_BY_EXT[ext] || fallback;
+}
+async function ensureMediaBucket() {
+    // Если бакет ещё не создан (миграция не до конца), пробуем создать через RPC (только админ)
+    try {
+        const { error } = await supabase.storage.getBucket(MEDIA_BUCKET);
+        if (error) await supabase.rpc('ensure_media_buckets');
+    } catch (e) { /* RPC нет в старой миграции — просто попробуем загрузить */ }
+}
 async function uploadMedia(file, folder, maxMb) {
     if (!file) return null;
     if (file.size > maxMb * 1048576) throw new Error(`Файл «${file.name}» больше ${maxMb} МБ`);
     const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
     const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { cacheControl: '31536000', contentType: file.type || undefined });
-    if (error) throw error;
+    const contentType = guessMime(file, folder === 'audio' ? 'audio/mpeg' : 'image/jpeg');
+    await ensureMediaBucket();
+    const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { cacheControl: '31536000', contentType });
+    if (error) {
+        const msg = (error.message || String(error)).toLowerCase();
+        if (msg.includes('bucket') && msg.includes('not found'))
+            throw new Error('Бакет «track-media» не найден. Выполни в Supabase → SQL Editor файл trueestimation_security_patch.sql (или создай бакет вручную: Storage → New bucket → track-media, public)');
+        if (msg.includes('row-level security') || msg.includes('violates') || msg.includes('42501'))
+            throw new Error('Загрузка отклонена политикой безопасности (RLS). Выполни файл trueestimation_security_patch.sql в SQL Editor — там исправленные политики storage');
+        throw error;
+    }
     return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 function mediaPathFromUrl(u) {
