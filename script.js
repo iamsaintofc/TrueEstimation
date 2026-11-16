@@ -148,6 +148,11 @@ function fmtDate(d) {
     return new Date(d).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+window.openSiteReview = function() {
+    if (!currentUserId) return showToast('Войдите, чтобы оставить отзыв', 'error');
+    openSupportModal({ type: 'review' });
+}
+
 window.openSupportModal = function(opts) {
     if (!currentUserId) return showToast('Войдите, чтобы написать в поддержку', 'error');
     opts = (opts && typeof opts === 'object' && !opts.target) ? opts : (opts || {});
@@ -178,6 +183,10 @@ window.toggleTargetUserInput = function() {
     const type = document.getElementById('support-type').value;
     const wrap = document.getElementById('support-target-wrap');
     const input = document.getElementById('support-target-user');
+    const desc = document.getElementById('support-desc');
+    if (desc) desc.innerText = type === 'review'
+        ? 'Расскажи, что нравится на сайте и что стоит улучшить. Ответ поддержки появится во вкладке «Мои обращения».'
+        : 'Опиши проблему, баг или пожалуйся на пользователя. Ответ появится во вкладке «Мои обращения».';
     if (type === 'report') {
         wrap.classList.remove('hidden');
     } else {
@@ -205,7 +214,7 @@ function renderMyTickets() {
     const cnt = document.getElementById('support-my-count');
     if (cnt) cnt.innerText = mine.length ? `(${mine.length})` : '';
     if (!mine.length) { list.innerHTML = `<p class="text-sm text-gray-500 text-center py-8">Ты пока ничего не отправлял</p>`; return; }
-    const typeText = t => t === 'bug' ? 'Баг' : t === 'report' ? 'Жалоба' : 'Другое';
+    const typeText = t => t === 'bug' ? 'Баг' : t === 'report' ? 'Жалоба' : t === 'review' ? 'Отзыв о сайте' : 'Другое';
     list.innerHTML = mine.map(r => {
         const done = r.status === 'resolved';
         const badge = done
@@ -257,6 +266,11 @@ window.submitSupport = async function() {
         const row = { user_id: currentUserId, type, target_username: target ? target.username : null, target_user_id: target ? target.id : null, message, status: 'open' };
         if (pendingReportRatingId) row.target_rating_id = pendingReportRatingId;
         let { error } = await supabase.from('reports').insert(row);
+        if (error && type === 'review' && /check constraint|violates/i.test(error.message || '')) {
+            // SQL-миграция с типом 'review' ещё не выполнена — сохраняем как "Другое"
+            row.type = 'other';
+            ({ error } = await supabase.from('reports').insert(row));
+        }
         if (error && /target_user_id|status|column/i.test(error.message || '')) {
             delete row.target_user_id; delete row.status; delete row.target_rating_id;
             ({ error } = await supabase.from('reports').insert(row));
@@ -1095,7 +1109,7 @@ function renderAdminPanel() {
         const done = r.status === 'resolved';
         const senderP = allProfilesData.find(p => p.id === r.user_id);
         const targetP = (r.target_user_id && allProfilesData.find(p => p.id === r.target_user_id)) || findProfileByName(r.target_username);
-        const typeText = r.type === 'bug' ? 'Баг' : r.type === 'report' ? 'Жалоба' : 'Другое';
+        const typeText = r.type === 'bug' ? 'Баг' : r.type === 'report' ? 'Жалоба' : r.type === 'review' ? 'Отзыв о сайте' : 'Другое';
         const sender = senderP
             ? `<button onclick="openUserProfile('${senderP.id}')" class="text-sm text-white font-bold hover:underline text-left">${escapeHtml(senderP.username)}</button>`
             : `<span class="text-sm text-gray-500">Неизвестный</span>`;
