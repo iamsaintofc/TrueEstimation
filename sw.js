@@ -1,6 +1,6 @@
 // Service worker: оболочка сайта работает офлайн, обновления подхватываются сразу (network-first).
-const CACHE = 'trueestimation-v1';
-const SHELL = ['./', 'index.html', 'script.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'trueestimation-v2';
+const SHELL = ['./', 'index.html', 'script.js', 'styles.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(SHELL.map(u => c.add(u)))).then(() => self.skipWaiting()));
@@ -17,4 +17,3 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(req).then(r => r || caches.match('index.html')))
   );
 });
-
