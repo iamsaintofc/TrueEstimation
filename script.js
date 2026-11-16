@@ -7,6 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const _hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
 let cameFromEmailLink = /^(signup|email|magiclink|invite|email_change)$/.test(_hashParams.get('type') || '');
 const emailLinkError = _hashParams.get('error_description');
+let scheduledTracksData = [], allNewsData = [], lastLoadAt = Date.now(), editingNewsId = null;
 const MASTER_ADMIN_EMAIL = 'zahavalgovno777@gmail.com';
 
 const translations = {
@@ -786,8 +787,9 @@ async function loadData() {
         const likesByComment = new Map(); commentLikes.forEach(l => { if (!likesByComment.has(l.rating_id)) likesByComment.set(l.rating_id, []); likesByComment.get(l.rating_id).push(l.user_id); });
         const likesByReply = new Map(); replyLikes.forEach(l => { if (!likesByReply.has(l.reply_id)) likesByReply.set(l.reply_id, []); likesByReply.get(l.reply_id).push(l.user_id); });
 
-        allTracksData = []; let totalGlobalVotes = 0;
+        allTracksData = []; scheduledTracksData = []; lastLoadAt = Date.now(); let totalGlobalVotes = 0;
         for (const track of tracks) {
+            if (track.publish_at && new Date(track.publish_at).getTime() > Date.now()) { scheduledTracksData.push({ ...track, category: (track.category && track.category.trim()) || 'Без категории', avgScore: 0, votesCount: 0, likesCount: 0, userLiked: false }); continue; }
             const tRatings = ratingsByTrack.get(track.id) || []; const tLikes = likesByTrack.get(track.id) || []; const votesCount = tRatings.length; totalGlobalVotes += votesCount;
             let avgScore = 0; if (votesCount > 0) { const sum = tRatings.reduce((acc, curr) => acc + curr.score, 0); avgScore = parseFloat((sum / votesCount).toFixed(1)); }
             let category = track.category; if (!category || category.trim() === "") category = 'Без категории';
@@ -809,6 +811,7 @@ async function loadData() {
         const statsEl = document.getElementById('stats-container');
         if(statsEl) statsEl.innerText = `${allTracksData.length} треков | ${totalGlobalVotes} оценок`;
         
+        await loadNews();
         renderSidebarPlaylists();
         applyLanguage(); 
         renderView(); 
@@ -879,7 +882,7 @@ function renderCategories() {
         if(document.getElementById('nav-liked')) document.getElementById('nav-liked').setAttribute('class', currentCategory === 'Liked' ? 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold bg-white/10 text-white transition-colors text-left neon-text' : 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left');
         
         const navCls = key => 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors text-left ' + (currentCategory === key ? 'bg-white/10 text-white neon-text' : 'text-gray-300 hover:text-white hover:bg-white/10');
-        document.getElementById('nav-top')?.setAttribute('class', navCls('TopTracks')); document.getElementById('nav-ranking')?.setAttribute('class', navCls('UserRanking'));
+        document.getElementById('nav-top')?.setAttribute('class', navCls('TopTracks')); document.getElementById('nav-ranking')?.setAttribute('class', navCls('UserRanking')); document.getElementById('nav-news')?.setAttribute('class', navCls('News'));
 
         const adminBtnClass = currentCategory === 'AdminPanel' 
             ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-white/10 text-cyan-200 transition-colors text-left neon-text' 
@@ -929,7 +932,7 @@ function renderView() {
 
         heroContainer.classList.add('hidden'); listViewContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); adminViewContainer.classList.add('hidden');
         adminViewContainer.classList.remove('flex');
-        document.getElementById('home-extras')?.classList.add('hidden'); document.getElementById('top-view-container')?.classList.add('hidden'); document.getElementById('ranking-view-container')?.classList.add('hidden');
+        document.getElementById('home-extras')?.classList.add('hidden'); document.getElementById('top-view-container')?.classList.add('hidden'); document.getElementById('ranking-view-container')?.classList.add('hidden'); document.getElementById('news-view-container')?.classList.add('hidden');
 
         if (currentCategory === 'Главное меню') { 
             heroContainer.classList.remove('hidden'); 
@@ -941,6 +944,8 @@ function renderView() {
             document.getElementById('top-view-container').classList.remove('hidden'); renderTopTracks();
         } else if (currentCategory === 'UserRanking') {
             document.getElementById('ranking-view-container').classList.remove('hidden'); renderUserRanking();
+        } else if (currentCategory === 'News') {
+            document.getElementById('news-view-container').classList.remove('hidden'); renderNewsView();
         } else if (currentCategory === 'AdminPanel') {
             if (!isAdmin) { changeCategory('Главное меню'); return; }
             adminViewContainer.classList.remove('hidden'); 
@@ -1029,7 +1034,7 @@ function renderTracksList() {
 
         if (searchQuery) { filteredTracks = filteredTracks.filter(t => t.title.toLowerCase().includes(searchQuery) || (t.artist && t.artist.toLowerCase().includes(searchQuery))); }
 
-        filteredTracks.sort((a, b) => { if (currentSort === 'newest') return new Date(b.created_at) - new Date(a.created_at); if (currentSort === 'popular') return b.votesCount - a.votesCount; if (currentSort === 'likes') return b.likesCount - a.likesCount; return b.avgScore - a.avgScore; });
+        filteredTracks.sort((a, b) => { if (currentSort === 'newest') return new Date(b.publish_at || b.created_at) - new Date(a.publish_at || a.created_at); if (currentSort === 'popular') return b.votesCount - a.votesCount; if (currentSort === 'likes') return b.likesCount - a.likesCount; return b.avgScore - a.avgScore; });
         if (filteredTracks.length === 0) { container.innerHTML = `<p class="text-center text-gray-400 py-10">Ничего не найдено</p>`; return; }
 
         const htmlParts = filteredTracks.map(track => {
@@ -1818,16 +1823,17 @@ window.adminAddTrack = async function() {
     const title = $id('add-track-title').value.trim(), artist = $id('add-track-artist').value.trim(), category = $id('add-track-category').value.trim();
     let audio_url = $id('add-track-audio').value.trim(), cover_url = $id('add-track-cover').value.trim();
     const release_date = $id('add-track-release').value || null;
+    const publishRaw = $id('add-track-publish').value; const publish_at = publishRaw ? new Date(publishRaw).toISOString() : null;
     const aFile = $id('add-track-audio-file').files[0], cFile = $id('add-track-cover-file').files[0];
     if (!title || (!audio_url && !aFile)) return showToast('Название и аудио обязательны', 'error');
     const btn = $id('add-track-btn'); btn.disabled = true; btn.classList.add('opacity-50'); btn.innerText = 'Загрузка…';
     try {
         if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
         if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
-        const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url, release_date });
+        const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url, release_date, publish_at });
         if (error) throw error;
-        showToast('Трек добавлен!', 'success');
-        ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover', 'add-track-release', 'add-track-audio-file', 'add-track-cover-file'].forEach(i => { $id(i).value = ''; });
+        showToast(publish_at && new Date(publish_at) > new Date() ? 'Трек запланирован на ' + fmtDateTime(publish_at) : 'Трек добавлен!', 'success');
+        ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover', 'add-track-release', 'add-track-publish', 'add-track-audio-file', 'add-track-cover-file'].forEach(i => { $id(i).value = ''; });
         await loadData();
     } catch (e) { showToast('Ошибка: ' + (e.message || e), 'error'); }
     finally { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerText = 'Добавить трек'; }
@@ -1836,11 +1842,11 @@ window.adminAddTrack = async function() {
 function renderAdminTracks() {
     const el = $id('admin-tracks-list'); if (!el) return;
     const q = ($id('admin-tracks-search')?.value || '').trim().toLowerCase();
-    const list = allTracksData.filter(t => !q || t.title.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q));
+    const list = [...scheduledTracksData, ...allTracksData].filter(t => !q || t.title.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q));
     el.innerHTML = list.length ? list.map(t => `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
         <td class="p-3 w-14">${coverImg(t, 'w-10 h-10 rounded-lg')}</td>
         <td class="p-3"><div class="text-sm font-bold truncate max-w-[220px]">${escapeHtml(t.title)}</div><div class="text-xs text-gray-400 truncate max-w-[220px]">${escapeHtml(t.artist || '—')}</div></td>
-        <td class="p-3 text-xs text-cyan-300">${escapeHtml(t.category)}</td>
+        <td class="p-3 text-xs text-cyan-300">${escapeHtml(t.category)}${schedBadge(t.publish_at)}</td>
         <td class="p-3 text-xs text-gray-400 whitespace-nowrap"><span class="text-yellow-400 font-bold">${t.avgScore || '—'}</span> · ${t.votesCount} оц.</td>
         <td class="p-3 text-right whitespace-nowrap"><button onclick="openEditTrack(${Number(t.id)})" class="bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Изменить</button>
         <button onclick="deleteTrack(${Number(t.id)})" class="ml-1 bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Удалить</button></td></tr>`).join('')
@@ -1850,18 +1856,19 @@ window.renderAdminTracks = renderAdminTracks;
 
 let editingTrackId = null;
 window.openEditTrack = function(id) {
-    const t = allTracksData.find(x => x.id === id); if (!t || !isAdmin) return;
+    const t = [...allTracksData, ...scheduledTracksData].find(x => x.id === id); if (!t || !isAdmin) return;
     editingTrackId = id;
     $id('edit-track-title').value = t.title || ''; $id('edit-track-artist').value = t.artist || '';
     $id('edit-track-category').value = t.category === 'Без категории' ? '' : t.category;
     $id('edit-track-audio').value = t.audio_url || ''; $id('edit-track-cover').value = t.cover_url || '';
     $id('edit-track-audio-file').value = ''; $id('edit-track-cover-file').value = '';
     $id('edit-track-release').value = t.release_date ? String(t.release_date).slice(0, 10) : '';
+    $id('edit-track-publish').value = toLocalInput(t.publish_at);
     $id('edit-track-modal').classList.remove('hidden');
 }
 window.closeEditTrack = function() { $id('edit-track-modal').classList.add('hidden'); editingTrackId = null; }
 window.saveTrackEdit = async function() {
-    const t = allTracksData.find(x => x.id === editingTrackId); if (!t || !isAdmin) return;
+    const t = [...allTracksData, ...scheduledTracksData].find(x => x.id === editingTrackId); if (!t || !isAdmin) return;
     const title = $id('edit-track-title').value.trim();
     if (!title) return showToast('Название обязательно', 'error');
     let audio_url = $id('edit-track-audio').value.trim(), cover_url = $id('edit-track-cover').value.trim();
@@ -1871,7 +1878,7 @@ window.saveTrackEdit = async function() {
         if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
         if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
         if (!audio_url) throw new Error('Нужна ссылка на аудио или файл');
-        const { error } = await supabase.from('tracks').update({ title, artist: $id('edit-track-artist').value.trim(), category: $id('edit-track-category').value.trim() || null, audio_url, cover_url: cover_url || null, release_date: $id('edit-track-release').value || null }).eq('id', t.id);
+        const { error } = await supabase.from('tracks').update({ title, artist: $id('edit-track-artist').value.trim(), category: $id('edit-track-category').value.trim() || null, audio_url, cover_url: cover_url || null, release_date: $id('edit-track-release').value || null, publish_at: $id('edit-track-publish').value ? new Date($id('edit-track-publish').value).toISOString() : null }).eq('id', t.id);
         if (error) throw error;
         const old = [aFile && t.audio_url, cFile && t.cover_url].map(mediaPathFromUrl).filter(Boolean);
         if (old.length) supabase.storage.from(MEDIA_BUCKET).remove(old).catch(() => {});
@@ -1880,7 +1887,7 @@ window.saveTrackEdit = async function() {
     finally { btn.disabled = false; btn.classList.remove('opacity-50'); }
 }
 window.deleteTrack = function(id) {
-    const t = allTracksData.find(x => x.id === id); if (!t || !isAdmin) return;
+    const t = [...allTracksData, ...scheduledTracksData].find(x => x.id === id); if (!t || !isAdmin) return;
     showConfirm(`Удалить трек «${t.title}»? Его оценки и места в плейлистах тоже пропадут.`, async () => {
         const { error } = await supabase.from('tracks').delete().eq('id', id);
         if (error) return showToast('Ошибка: ' + error.message, 'error');
@@ -1890,6 +1897,129 @@ window.deleteTrack = function(id) {
         showToast('Трек удалён', 'success'); await loadData();
     }, 'delete');
 }
+
+// ================= НОВОСТИ И ПЛАНИРОВАНИЕ =================
+const fmtDateTime = iso => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const isFuture = iso => !!iso && new Date(iso).getTime() > Date.now();
+const schedBadge = iso => isFuture(iso) ? `<div class="mt-1 inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-400/15 text-cyan-200 border border-cyan-400/30 whitespace-nowrap">⏳ выйдет ${fmtDateTime(iso)}</div>` : '';
+function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); if (isNaN(d)) return ''; const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+async function loadNews() {
+    try {
+        const { data, error } = await supabase.from('news').select('*').order('publish_at', { ascending: false });
+        if (error) throw error;
+        allNewsData = data || [];
+    } catch (e) { allNewsData = []; }
+    updateNewsDot();
+}
+
+function updateNewsDot() {
+    const dot = document.getElementById('news-dot'); if (!dot) return;
+    const latest = allNewsData.filter(n => !isFuture(n.publish_at)).reduce((m, n) => Math.max(m, new Date(n.publish_at).getTime()), 0);
+    const seen = parseInt(localStorage.getItem('te_news_seen') || '0', 10);
+    dot.classList.toggle('hidden', !(latest > seen) || currentCategory === 'News');
+}
+
+function formatNewsBody(text) {
+    const inline = t => escapeHtml(t).replace(/\*\*(.+?)\*\*/g, '<b class="text-white">$1</b>');
+    let html = '', inList = false;
+    const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+    for (const raw of String(text || '').split('\n')) {
+        const l = raw.trim();
+        if (/^[-•]\s+/.test(l)) { if (!inList) { html += '<ul class="list-disc pl-5 space-y-1.5 my-2">'; inList = true; } html += '<li>' + inline(l.replace(/^[-•]\s+/, '')) + '</li>'; continue; }
+        closeList();
+        if (!l) continue;
+        if (l.startsWith('## ')) html += '<h4 class="text-base font-extrabold text-cyan-200 mt-5 mb-1">' + inline(l.slice(3)) + '</h4>';
+        else if (l.startsWith('> ')) html += '<blockquote class="my-3 pl-4 border-l-2 border-cyan-400/60 italic text-gray-200">' + inline(l.slice(2)) + '</blockquote>';
+        else html += '<p class="my-2">' + inline(l) + '</p>';
+    }
+    closeList(); return html;
+}
+
+function renderNewsView() {
+    const list = $id('news-list'); if (!list) return;
+    $id('news-add-btn')?.classList.toggle('hidden', !isAdmin);
+    localStorage.setItem('te_news_seen', String(Date.now())); updateNewsDot();
+    if (!allNewsData.length) { list.innerHTML = '<div class="text-center text-gray-400 py-16 bg-white/5 border border-white/10 rounded-2xl">Пока новостей нет. Загляни позже!</div>'; return; }
+    list.innerHTML = allNewsData.map(n => {
+        const future = isFuture(n.publish_at);
+        const author = allProfilesData.find(p => p.id === n.author_id)?.username || 'Команда TrueEstimation';
+        const adminBtns = isAdmin ? `<div class="flex gap-1 shrink-0"><button onclick="openNewsModal(${Number(n.id)})" class="bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Изменить</button><button onclick="deleteNews(${Number(n.id)})" class="bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Удалить</button></div>` : '';
+        return `<article class="bg-white/5 border ${future ? 'border-dashed border-cyan-400/40' : 'border-white/10'} rounded-2xl p-5 md:p-6 hover:border-cyan-500/30 transition-colors">
+            <div class="flex items-start justify-between gap-3 mb-1"><h3 class="text-xl md:text-2xl font-extrabold text-white leading-tight">${escapeHtml(n.title)}</h3>${adminBtns}</div>
+            <div class="text-xs text-gray-400 mb-3">${future ? '⏳ Запланировано на ' : ''}${fmtDateTime(n.publish_at)} · ${escapeHtml(author)}</div>
+            <div class="text-sm text-gray-300 leading-relaxed">${formatNewsBody(n.body)}</div></article>`;
+    }).join('');
+}
+
+window.openNewsModal = function(id) {
+    if (!isAdmin) return;
+    editingNewsId = id || null;
+    const n = id ? allNewsData.find(x => x.id === id) : null;
+    $id('news-modal-title').innerText = n ? 'Изменить новость' : 'Новая новость';
+    $id('news-title').value = n ? n.title : ''; $id('news-body').value = n ? n.body : '';
+    $id('news-publish').value = n && isFuture(n.publish_at) ? toLocalInput(n.publish_at) : '';
+    $id('news-save-btn').innerText = $id('news-publish').value ? 'Запланировать' : (n ? 'Сохранить' : 'Опубликовать');
+    $id('news-modal').classList.remove('hidden');
+};
+window.closeNewsModal = function() { $id('news-modal').classList.add('hidden'); editingNewsId = null; };
+
+window.saveNews = async function() {
+    if (!isAdmin) return;
+    const title = $id('news-title').value.trim(), body = $id('news-body').value.trim(), raw = $id('news-publish').value;
+    if (!title) return showToast('Введи заголовок', 'error');
+    if (!body) return showToast('Введи текст новости', 'error');
+    const when = raw ? new Date(raw) : null;
+    if (when && when.getTime() < Date.now() - 60000 && !editingNewsId) return showToast('Время публикации уже прошло. Очисти поле, чтобы опубликовать сразу', 'error');
+    const btn = $id('news-save-btn'); btn.disabled = true;
+    try {
+        let error;
+        if (editingNewsId) {
+            const patch = { title, body, updated_at: new Date().toISOString() };
+            if (raw) patch.publish_at = when.toISOString();
+            else if (isFuture(allNewsData.find(x => x.id === editingNewsId)?.publish_at)) patch.publish_at = new Date(Date.now() - 2000).toISOString();
+            ({ error } = await supabase.from('news').update(patch).eq('id', editingNewsId));
+        } else {
+            const row = { title, body, author_id: currentUserId };
+            if (raw) row.publish_at = when.toISOString();
+            ({ error } = await supabase.from('news').insert(row));
+        }
+        if (error) throw error;
+        showToast(raw ? 'Новость запланирована на ' + fmtDateTime(when) : 'Новость опубликована', 'success');
+        closeNewsModal(); await loadNews(); renderNewsView();
+    } catch (e) { showToast('Ошибка: ' + e.message + ' (выполнена ли SQL-миграция 4?)', 'error'); }
+    btn.disabled = false;
+};
+
+window.deleteNews = function(id) {
+    if (!isAdmin) return;
+    showConfirm('Удалить эту новость? Это действие нельзя отменить.', async () => {
+        const { data, error } = await supabase.from('news').delete().eq('id', id).select('id');
+        if (error || !data || !data.length) return showToast('Не удалось удалить' + (error ? ': ' + error.message : ''), 'error');
+        showToast('Новость удалена', 'success'); await loadNews(); renderNewsView();
+    });
+};
+
+// Автопубликация: раз в минуту проверяем, не наступило ли время выхода новости или трека
+async function checkContentUpdates() {
+    try {
+        if (document.hidden) return;
+        const now = Date.now();
+        if (isAdmin) {
+            const due = [...scheduledTracksData.map(t => t.publish_at), ...allNewsData.map(n => n.publish_at)].map(x => new Date(x).getTime()).some(x => x > lastLoadAt && x <= now);
+            if (due) { await loadData(); showToast('Запланированный контент опубликован', 'success'); }
+            return;
+        }
+        const [a, b] = await Promise.all([supabase.from('tracks').select('id', { count: 'exact', head: true }), supabase.from('news').select('id', { count: 'exact', head: true })]);
+        if (a.error || b.error) return;
+        const newNews = b.count > allNewsData.length, newTracks = a.count > allTracksData.length;
+        if (a.count !== allTracksData.length || b.count !== allNewsData.length) {
+            await loadData();
+            if (newNews) showToast('📰 Вышла новая новость', 'success'); else if (newTracks) showToast('🎵 На сайте появился новый трек', 'success');
+        }
+    } catch (e) {}
+}
+setInterval(checkContentUpdates, 60000);
 
 // ---- журнал банов ----
 let banLogData = [];
