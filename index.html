@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrueEstimation | Музыка</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#020b0e">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23e0ffff%27%2F%3E%3Cstop%20offset%3D%27.5%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%230891b2%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2748%27%20fill%3D%27%2302080a%27%2F%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2743%27%20fill%3D%27none%27%20stroke%3D%27url%28%23g%29%27%20stroke-width%3D%276%27%2F%3E%3Cg%20fill%3D%27url%28%23g%29%27%3E%3Crect%20x%3D%2727%27%20y%3D%2729%27%20width%3D%2746%27%20height%3D%2711%27%20rx%3D%273%27%2F%3E%3Crect%20x%3D%2744.5%27%20y%3D%2729%27%20width%3D%2711%27%20height%3D%2743%27%20rx%3D%273%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 
@@ -114,6 +117,9 @@
         #progress-thumb, #volume-thumb { width: 14px !important; height: 14px !important; margin-left: -7px !important; background: #e6fdff !important; box-shadow: 0 0 12px rgba(165,243,252,.9) !important; border: 0 !important; }
         #global-player button svg { transition: transform .15s; }
         #global-player button:hover > svg { transform: scale(1.12); }
+        .skeleton { position: relative; overflow: hidden; background: rgba(255,255,255,.05); border-radius: .75rem; }
+        .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(34,211,238,.14), transparent); animation: shimmer 1.4s infinite; }
+        @keyframes shimmer { 100% { transform: translateX(100%); } }
         #ban-banner { background: linear-gradient(90deg, rgba(127,29,29,.45), rgba(0,0,0,.2)); border: 1px solid rgba(239,68,68,.45); }
     </style>
 </head>
@@ -233,7 +239,8 @@
                 </button>
             </div>
 
-            <div id="hero-container" class="hidden flex-1 items-center justify-center overflow-y-auto pb-20"></div>
+            <div id="hero-container" class="hidden items-center justify-center pb-6"><div class="skeleton w-full max-w-4xl mx-auto h-96"></div></div>
+            <div id="home-extras" class="hidden w-full max-w-4xl mx-auto space-y-6 pb-10"></div>
 
             <div id="list-view-container" class="flex-1">
                 <div class="flex items-center justify-between mb-6">
@@ -246,9 +253,9 @@
                 </div>
                 
                 <div class="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-4 border-b border-white/5 pb-2">
-                    <div class="w-8 md:w-10 shrink-0"></div><div class="w-10 md:w-12 shrink-0"></div><div class="flex-1">Название</div><div class="w-20 md:w-24 text-center shrink-0">Рейтинг</div><div class="w-28 md:w-32 text-center shrink-0">Действия</div><div class="w-20 md:w-24 text-right shrink-0">Оценить</div>
+                    <div class="w-8 md:w-10 shrink-0"></div><div class="w-10 md:w-12 shrink-0"></div><div class="flex-1">Название</div><div class="w-20 md:w-24 text-center shrink-0">Рейтинг</div><div class="w-32 md:w-40 text-center shrink-0">Действия</div><div class="w-20 md:w-24 text-right shrink-0">Оценить</div>
                 </div>
-                <div id="tracks-container" class="space-y-1 pb-24"></div>
+                <div id="tracks-container" class="space-y-1 pb-24"><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div></div>
             </div>
 
             <div id="top-view-container" class="hidden flex-1 w-full max-w-5xl mx-auto"></div>
@@ -284,9 +291,11 @@
                             <input type="text" id="add-track-title" placeholder="Название" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="text" id="add-track-artist" placeholder="Исполнитель" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="text" id="add-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
-                            <input type="text" id="add-track-audio" placeholder="Ссылка на аудио (mp3)" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
-                            <input type="text" id="add-track-cover" placeholder="Ссылка на обложку (jpg/png)" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
-                            <button onclick="adminAddTrack()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2 rounded-lg transition-colors mt-2 neon-btn">Добавить трек</button>
+                            <input type="text" id="add-track-audio" placeholder="Ссылка на аудио (mp3) или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                            <input type="file" id="add-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
+                            <input type="text" id="add-track-cover" placeholder="Ссылка на обложку или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                            <input type="file" id="add-track-cover-file" accept="image/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
+                            <button id="add-track-btn" onclick="adminAddTrack()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2 rounded-lg transition-colors mt-2 neon-btn">Добавить трек</button>
                         </div>
                     </div>
                 </div>
@@ -301,6 +310,28 @@
                         <table class="w-full min-w-[760px] text-left border-collapse">
                             <thead><tr class="bg-black/40 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400"><th class="p-4 font-bold w-12">✓</th><th class="p-4 font-bold">От кого</th><th class="p-4 font-bold">Тип</th><th class="p-4 font-bold">Нарушитель</th><th class="p-4 font-bold">Сообщение</th><th class="p-4 font-bold text-right">Действие</th></tr></thead>
                             <tbody id="admin-reports-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ТРЕКИ -->
+                <div class="w-full mt-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h2 class="text-2xl font-extrabold tracking-tight text-cyan-300 neon-text">Треки</h2>
+                        <input type="text" id="admin-tracks-search" oninput="renderAdminTracks()" placeholder="Поиск трека" class="bg-black/40 border border-white/10 rounded-full py-1.5 px-4 text-sm text-white outline-none focus:border-cyan-500 w-full sm:w-64">
+                    </div>
+                    <div class="bg-white/5 border border-white/10 rounded-2xl overflow-x-auto w-full">
+                        <table class="w-full min-w-[560px] text-left border-collapse"><tbody id="admin-tracks-list"></tbody></table>
+                    </div>
+                </div>
+
+                <!-- ЖУРНАЛ БАНОВ -->
+                <div class="w-full mt-8">
+                    <h2 class="text-2xl font-extrabold tracking-tight text-cyan-300 neon-text mb-4">Журнал банов</h2>
+                    <div class="bg-white/5 border border-white/10 rounded-2xl overflow-x-auto w-full">
+                        <table class="w-full min-w-[560px] text-left border-collapse">
+                            <thead><tr class="bg-black/40 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400"><th class="p-3 font-bold">Когда</th><th class="p-3 font-bold">Кто</th><th class="p-3 font-bold">Действие</th><th class="p-3 font-bold">Кого</th><th class="p-3 font-bold">Детали</th></tr></thead>
+                            <tbody id="admin-banlog-list"></tbody>
                         </table>
                     </div>
                 </div>
@@ -338,6 +369,7 @@
         </div>
         
         <div class="w-auto md:w-[30%] flex justify-end items-center gap-2 hidden md:flex">
+            <button onclick="toggleQueuePanel()" id="queue-btn" title="Очередь" class="relative w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7m9-6v6m-3-3h6"/></svg><span id="queue-count" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-cyan-500 text-black text-[10px] font-bold flex items-center justify-center">0</span></button>
             <button onclick="toggleMute()" id="volume-icon-btn" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5" title="Выключить звук">
                 <div id="volume-eq" class="flex items-end gap-[2px] h-4">
                     <div class="eq-bar eq-anim-1"></div><div class="eq-bar eq-anim-2"></div><div class="eq-bar eq-anim-3"></div><div class="eq-bar eq-anim-4"></div>
@@ -540,6 +572,35 @@
                 <button onclick="confirmBan()" class="flex-1 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold transition-colors">Забанить</button>
             </div>
         </div>
+    </div>
+
+    <!-- РЕДАКТИРОВАНИЕ ТРЕКА -->
+    <div id="edit-track-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[75] hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 rounded-3xl p-6 w-full max-w-md shadow-2xl relative neon-border max-h-[92vh] overflow-y-auto custom-scrollbar">
+            <h3 class="text-xl font-bold mb-4 text-cyan-300 neon-text">Редактировать трек</h3>
+            <div class="space-y-3">
+                <input type="text" id="edit-track-title" placeholder="Название" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <input type="text" id="edit-track-artist" placeholder="Исполнитель" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <input type="text" id="edit-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <input type="text" id="edit-track-audio" placeholder="Ссылка на аудио" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <input type="file" id="edit-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
+                <input type="text" id="edit-track-cover" placeholder="Ссылка на обложку" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <input type="file" id="edit-track-cover-file" accept="image/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
+            </div>
+            <div class="flex gap-2 mt-5">
+                <button onclick="closeEditTrack()" class="flex-1 px-4 py-2 rounded-xl text-gray-300 hover:bg-white/5">Отмена</button>
+                <button id="edit-track-save" onclick="saveTrackEdit()" class="flex-1 px-4 py-2 rounded-xl bg-cyan-500 text-black font-bold neon-btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ОЧЕРЕДЬ -->
+    <div id="queue-panel" class="hidden fixed bottom-28 md:bottom-32 right-3 md:right-6 w-80 max-w-[calc(100vw-1.5rem)] max-h-[50vh] flex-col bg-gray-900 rounded-2xl neon-border z-50 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
+            <span class="text-sm font-bold text-white">Играть дальше</span>
+            <div class="flex gap-3 text-[11px] font-bold"><button onclick="clearQueue()" class="text-gray-500 hover:text-red-400">Очистить</button><button onclick="toggleQueuePanel()" class="text-cyan-400 hover:text-cyan-300">Закрыть</button></div>
+        </div>
+        <div id="queue-list" class="overflow-y-auto custom-scrollbar"></div>
     </div>
 
     <div id="toast-container" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none"></div>
