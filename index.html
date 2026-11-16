@@ -193,6 +193,7 @@
         <aside id="sidebar" class="w-64 bg-black/60 md:bg-black/20 backdrop-blur-xl md:backdrop-blur-none border-r border-white/5 flex flex-col py-6 px-4 pb-28 overflow-y-auto flex-shrink-0">
             <nav class="space-y-1 mb-6">
                 <button onclick="changeCategory('Главное меню')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-main"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Главное</button>
+                <button onclick="changeCategory('News')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-news"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>Новости<span id="news-dot" class="hidden ml-auto w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)]"></span></button>
                 <button onclick="changeCategory('Все')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-all"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>Все треки</button>
                 <button onclick="changeCategory('Комментарии')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-comments"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>Комментарии</button>
                 <button onclick="changeCategory('TopTracks')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-left" id="nav-top"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14v4a7 7 0 01-14 0V3zm7 11v4m-4 3h8M3 5h2m14 0h2"/></svg>Топ треков</button>
@@ -217,6 +218,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                     Поддержка
                 </button>
+                <div class="text-center text-[10px] text-gray-600 mt-2 tracking-wider">TE.1.0</div>
             </div>
         </aside>
 
@@ -254,6 +256,13 @@
 
             <div id="top-view-container" class="hidden flex-1 w-full max-w-5xl mx-auto"></div>
             <div id="ranking-view-container" class="hidden flex-1 w-full max-w-5xl mx-auto"></div>
+            <div id="news-view-container" class="hidden flex-1 w-full max-w-4xl mx-auto pb-32">
+                <div class="flex items-center justify-between gap-3 mb-6">
+                    <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight neon-text">Новости</h2>
+                    <button id="news-add-btn" onclick="openNewsModal()" class="hidden bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 neon-btn">+ Написать новость</button>
+                </div>
+                <div id="news-list" class="space-y-5"></div>
+            </div>
 
             <div id="comments-view-container" class="hidden flex-1">
                 <div class="flex items-center justify-between mb-6">
@@ -287,6 +296,8 @@
                             <input type="text" id="add-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <label class="block text-xs text-gray-400 -mb-1 pl-1">Дата релиза</label>
                             <input type="date" id="add-track-release" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
+                            <label class="block text-xs text-gray-400 -mb-1 pl-1">Выход трека на сайте (пусто — сразу)</label>
+                            <input type="datetime-local" id="add-track-publish" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
                             <input type="text" id="add-track-audio" placeholder="Ссылка на аудио (mp3) или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="file" id="add-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
                             <input type="text" id="add-track-cover" placeholder="Ссылка на обложку или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
@@ -380,6 +391,23 @@
     </div>
 
     <!-- МОДАЛКИ -->
+    <div id="news-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-900 border border-white/10 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative neon-border max-h-[90vh] overflow-y-auto">
+            <h3 id="news-modal-title" class="text-xl font-extrabold mb-4 text-cyan-400 neon-text">Новая новость</h3>
+            <div class="space-y-3">
+                <input type="text" id="news-title" maxlength="200" placeholder="Заголовок" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <textarea id="news-body" rows="9" placeholder="Текст новости…" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500 resize-y"></textarea>
+                <p class="text-[11px] text-gray-500 leading-relaxed">Оформление: **жирный**, строка с «- » — пункт списка, «## » — подзаголовок, «> » — цитата.</p>
+                <label class="block text-xs text-gray-400 pl-1">Время публикации (пусто — опубликовать сразу)</label>
+                <input type="datetime-local" id="news-publish" oninput="document.getElementById('news-save-btn').innerText = this.value ? 'Запланировать' : 'Опубликовать'" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
+                <div class="flex gap-2 pt-1">
+                    <button onclick="closeNewsModal()" class="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-colors">Отмена</button>
+                    <button id="news-save-btn" onclick="saveNews()" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-2 rounded-lg transition-colors neon-btn">Опубликовать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="login-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="bg-gray-900 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl relative neon-border">
             <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
@@ -583,6 +611,8 @@
                 <input type="text" id="edit-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                 <label class="block text-xs text-gray-400 -mb-1 pl-1">Дата релиза</label>
                 <input type="date" id="edit-track-release" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
+                <label class="block text-xs text-gray-400 -mb-1 pl-1">Выход трека на сайте (пусто — сразу)</label>
+                <input type="datetime-local" id="edit-track-publish" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
                 <input type="text" id="edit-track-audio" placeholder="Ссылка на аудио" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                 <input type="file" id="edit-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
                 <input type="text" id="edit-track-cover" placeholder="Ссылка на обложку" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
