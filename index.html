@@ -246,8 +246,8 @@
                     </div>
                 </div>
                 
-                <div class="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-4 border-b border-white/5 pb-2">
-                    <div class="w-8 md:w-10 shrink-0"></div><div class="w-10 md:w-12 shrink-0"></div><div class="flex-1">Название</div><div class="w-20 md:w-24 text-center shrink-0">Рейтинг</div><div class="w-32 md:w-40 text-center shrink-0">Действия</div><div class="w-20 md:w-24 text-right shrink-0">Оценить</div>
+                <div class="flex items-center text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-2 border-b border-white/5 pb-2">
+                    <div class="w-8 md:w-10 shrink-0"></div><div class="w-10 md:w-12 shrink-0"></div><div class="flex-1 min-w-0">Название</div><div class="w-20 md:w-24 text-center shrink-0">Рейтинг</div><div class="w-32 md:w-40 text-center shrink-0">Действия</div><div class="w-20 md:w-24 text-right shrink-0">Оценить</div>
                 </div>
                 <div id="tracks-container" class="space-y-1 pb-24"><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div><div class="skeleton h-14"></div></div>
             </div>
@@ -285,6 +285,8 @@
                             <input type="text" id="add-track-title" placeholder="Название" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="text" id="add-track-artist" placeholder="Исполнитель" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="text" id="add-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                            <label class="block text-xs text-gray-400 -mb-1 pl-1">Дата релиза</label>
+                            <input type="date" id="add-track-release" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
                             <input type="text" id="add-track-audio" placeholder="Ссылка на аудио (mp3) или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                             <input type="file" id="add-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
                             <input type="text" id="add-track-cover" placeholder="Ссылка на обложку или файл ниже" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
@@ -321,7 +323,10 @@
 
                 <!-- ЖУРНАЛ БАНОВ -->
                 <div class="w-full mt-8">
-                    <h2 class="text-2xl font-extrabold tracking-tight text-cyan-300 neon-text mb-4">Журнал банов</h2>
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h2 class="text-2xl font-extrabold tracking-tight text-cyan-300 neon-text">Журнал банов</h2>
+                        <button id="banlog-clear-btn" onclick="clearBanLog()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors active:scale-95">Очистить журнал</button>
+                    </div>
                     <div class="bg-white/5 border border-white/10 rounded-2xl overflow-x-auto w-full">
                         <table class="w-full min-w-[560px] text-left border-collapse">
                             <thead><tr class="bg-black/40 border-b border-white/10 text-xs uppercase tracking-wider text-gray-400"><th class="p-3 font-bold">Когда</th><th class="p-3 font-bold">Кто</th><th class="p-3 font-bold">Действие</th><th class="p-3 font-bold">Кого</th><th class="p-3 font-bold">Детали</th></tr></thead>
@@ -576,6 +581,8 @@
                 <input type="text" id="edit-track-title" placeholder="Название" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                 <input type="text" id="edit-track-artist" placeholder="Исполнитель" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                 <input type="text" id="edit-track-category" placeholder="Категория" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
+                <label class="block text-xs text-gray-400 -mb-1 pl-1">Дата релиза</label>
+                <input type="date" id="edit-track-release" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500" style="color-scheme:dark">
                 <input type="text" id="edit-track-audio" placeholder="Ссылка на аудио" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
                 <input type="file" id="edit-track-audio-file" accept="audio/*" class="w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500 file:text-black cursor-pointer">
                 <input type="text" id="edit-track-cover" placeholder="Ссылка на обложку" class="w-full bg-black/30 border border-white/10 p-2 rounded-lg text-sm text-white outline-none focus:border-cyan-500">
