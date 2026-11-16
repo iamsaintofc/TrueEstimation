@@ -145,6 +145,8 @@ window.openSupportModal = function(opts) {
     document.getElementById('support-type').value = opts.type || 'bug';
     toggleTargetUserInput();
     if (opts.target) document.getElementById('support-target-user').value = opts.target;
+    pendingReportRatingId = opts.ratingId || null;
+    if (opts.message) { const m = document.getElementById('support-message'); m.value = opts.message; document.getElementById('support-msg-counter').innerText = m.value.length + ' / 1000'; }
     switchSupportTab('new');
     renderMyTickets();
     document.getElementById('support-modal').classList.remove('hidden');
@@ -242,14 +244,15 @@ window.submitSupport = async function() {
     btn.disabled = true; btn.classList.add('opacity-50');
     try {
         const row = { user_id: currentUserId, type, target_username: target ? target.username : null, target_user_id: target ? target.id : null, message, status: 'open' };
+        if (pendingReportRatingId) row.target_rating_id = pendingReportRatingId;
         let { error } = await supabase.from('reports').insert(row);
         if (error && /target_user_id|status|column/i.test(error.message || '')) {
-            delete row.target_user_id; delete row.status;
+            delete row.target_user_id; delete row.status; delete row.target_rating_id;
             ({ error } = await supabase.from('reports').insert(row));
         }
         if (error) throw error;
 
-        showToast('Обращение отправлено! Спасибо.', 'success');
+        showToast('Обращение отправлено! Спасибо.', 'success'); pendingReportRatingId = null;
         document.getElementById('support-message').value = '';
         document.getElementById('support-target-user').value = '';
         document.getElementById('support-msg-counter').innerText = '0 / 1000';
@@ -372,10 +375,10 @@ window.openUserProfile = function(userId) {
                     ${isSelf ? '<div class="text-xs text-cyan-400">Это ты</div>' : ''}
                 </div>
             </div>
-            ${levelBlockHtml(p)}<div class="grid grid-cols-4 gap-2 mt-3">${stat(rs.length, 'Оценок')}${stat(cm.length, 'Отзывов')}${stat(avg, 'Ср. балл')}${stat(likes, 'Лайков')}</div>
+            ${levelBlockHtml(p)}${socialRowHtml(p)}<div class="grid grid-cols-4 gap-2 mt-3">${stat(rs.length, 'Оценок')}${stat(cm.length, 'Отзывов')}${stat(avg, 'Ср. балл')}${stat(likes, 'Лайков')}</div>
             <div class="flex gap-2 mt-4">${actions}<button onclick="shareUserProfile('${p.id}')" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition-colors">Ссылка</button></div>
             ${adminBlock}
-            ${achievementsHtml(p)}
+            ${achievementsHtml(p)}${favoritesHtml(p)}
             <h4 class="text-sm font-bold text-gray-300 mt-6 mb-2">Последние оценки</h4>
             <div class="space-y-1">${recent || '<p class="text-sm text-gray-500 py-4 text-center">Пока ничего не оценил</p>'}</div>
         </div>`;
@@ -464,7 +467,7 @@ async function updateProfileUI() {
     }
     currentUserProfile = await fetchProfile(currentUserId);
     const session = await supabase.auth.getSession(); 
-    const userEmail = session.data.session?.user?.email;
+    const userEmail = session.data.session?.user?.email; currentUserProfile.email = userEmail;
     isAdmin = (userEmail === MASTER_ADMIN_EMAIL) || currentUserProfile.is_admin;
     
     document.getElementById('login-btn').classList.add('hidden'); 
@@ -628,15 +631,7 @@ window.handlePasswordReset = async function() {
 window.logout = async function() { await supabase.auth.signOut(); showToast('Вы вышли', 'success'); }
 
 // --- АДМИН ПАНЕЛЬ ---
-window.adminAddTrack = async function() {
-    if (!isAdmin) return;
-    const title = document.getElementById('add-track-title').value.trim(); const artist = document.getElementById('add-track-artist').value.trim();
-    const category = document.getElementById('add-track-category').value.trim(); const audio_url = document.getElementById('add-track-audio').value.trim(); const cover_url = document.getElementById('add-track-cover').value.trim();
-    if (!title || !audio_url) return showToast('Название и аудио обязательны', 'error');
-    const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url });
-    if (error) showToast('Ошибка: ' + error.message, 'error');
-    else { showToast('Трек добавлен!', 'success'); document.getElementById('add-track-title').value = ''; document.getElementById('add-track-artist').value = ''; document.getElementById('add-track-category').value = ''; document.getElementById('add-track-audio').value = ''; document.getElementById('add-track-cover').value = ''; await loadData(); }
-}
+// (adminAddTrack — см. блок «УПРАВЛЕНИЕ ТРЕКАМИ» в конце файла)
 window.toggleAdminStatus = async function(targetUserId, currentStatus, targetEmail) {
     if (!isAdmin) return;
     if (targetEmail === MASTER_ADMIN_EMAIL) return showToast('Нельзя снять права с главного админа', 'error');
@@ -700,7 +695,7 @@ window.toggleGlobalPlay = function() {
     else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); } 
     updateAllPlayIcons(); updateVolumeUI();
 }
-window.playNext = function() { if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let nextIndex; if (isShuffle) { nextIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); nextIndex = currentIndex + 1; if (nextIndex >= allTracksData.length) { if (repeatMode === 1) nextIndex = 0; else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); updateAllPlayIcons(); return; } } } playTrack(allTracksData[nextIndex].id); }
+window.playNext = function() { if (!currentTrackId || allTracksData.length === 0) return; if (playQueue.length && repeatMode !== 2) { const qid = playQueue.shift(); renderQueuePanel(); if (qid === currentTrackId) { globalAudio.currentTime = 0; globalAudio.play(); } else playTrack(qid); return; } if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let nextIndex; if (isShuffle) { nextIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); nextIndex = currentIndex + 1; if (nextIndex >= allTracksData.length) { if (repeatMode === 1) nextIndex = 0; else { globalAudio.pause(); updateGlobalPlayPauseIcon(false); updateAllPlayIcons(); return; } } } playTrack(allTracksData[nextIndex].id); }
 window.playPrev = function() { if (!currentTrackId || allTracksData.length === 0) return; if (repeatMode === 2) { globalAudio.currentTime = 0; globalAudio.play(); return; } let prevIndex; if (isShuffle) { prevIndex = Math.floor(Math.random() * allTracksData.length); } else { const currentIndex = allTracksData.findIndex(t => t.id === currentTrackId); prevIndex = currentIndex - 1; if (prevIndex < 0) { if (repeatMode === 1) prevIndex = allTracksData.length - 1; else prevIndex = 0; } } playTrack(allTracksData[prevIndex].id); }
 window.toggleShuffle = function() { isShuffle = !isShuffle; const btn = document.getElementById('shuffle-btn'); if (isShuffle) { btn.classList.add('text-cyan-500'); btn.classList.remove('text-gray-400'); } else { btn.classList.remove('text-cyan-500'); btn.classList.add('text-gray-400'); } }
 window.toggleRepeat = function() { repeatMode = (repeatMode + 1) % 3; const btn = document.getElementById('repeat-btn'); const badge = document.getElementById('repeat-badge'); btn.classList.remove('text-cyan-500', 'text-gray-400'); badge.classList.add('hidden'); if (repeatMode === 0) btn.classList.add('text-gray-400'); else if (repeatMode === 1) btn.classList.add('text-cyan-500'); else if (repeatMode === 2) { btn.classList.add('text-cyan-500'); badge.classList.remove('hidden'); } }
@@ -768,7 +763,7 @@ async function loadData() {
         ]);
 
         const tracks = tracksRes.data || []; const ratings = ratingsRes.data || []; const trackLikes = trackLikesRes.data || []; const commentLikes = commentLikesRes.data || [];
-        allProfilesData = profilesRes.data || []; allRepliesData = repliesRes.data || []; const replyLikes = replyLikesRes.data || [];
+        allProfilesData = profilesRes.data || []; await mergePrivateEmails(); await loadFollows(); allRepliesData = repliesRes.data || []; const replyLikes = replyLikesRes.data || [];
         userPlaylists = playlistsRes.data || [];
         allPlaylistTracksData = playlistTracksRes.data || [];
         allReportsData = reportsRes.data || [];
@@ -789,7 +784,7 @@ async function loadData() {
             allTracksData.push({ ...track, category, avgScore, votesCount, likesCount: tLikes.length, userLiked: currentUserId ? tLikes.includes(currentUserId) : false, userRating: userRatingObj });
         }
 
-        allCommentsData = ratings.filter(r => r.comment && r.comment.trim() !== "").map(r => {
+        allCommentsData = ratings.filter(r => r.comment && r.comment.trim() !== "" && (!r.hidden || isAdmin)).map(r => {
             const cLikes = likesByComment.get(r.id) || []; const track = tracks.find(t => t.id === r.track_id);
             const profile = allProfilesData.find(p => p.id === r.user_id) || { username: 'User', avatar_url: null, avatar_bg: '#1e293b', is_admin: false };
             const replies = allRepliesData.filter(rep => rep.rating_id === r.id).map(rep => {
@@ -923,11 +918,11 @@ function renderView() {
 
         heroContainer.classList.add('hidden'); listViewContainer.classList.add('hidden'); commentsViewContainer.classList.add('hidden'); adminViewContainer.classList.add('hidden');
         adminViewContainer.classList.remove('flex');
-        document.getElementById('top-view-container')?.classList.add('hidden'); document.getElementById('ranking-view-container')?.classList.add('hidden');
+        document.getElementById('home-extras')?.classList.add('hidden'); document.getElementById('top-view-container')?.classList.add('hidden'); document.getElementById('ranking-view-container')?.classList.add('hidden');
 
         if (currentCategory === 'Главное меню') { 
             heroContainer.classList.remove('hidden'); 
-            renderHero(); 
+            renderHero(); document.getElementById('home-extras')?.classList.remove('hidden'); renderHomeExtras();
         } else if (currentCategory === 'Комментарии') { 
             commentsViewContainer.classList.remove('hidden'); 
             renderCommentsView(); 
@@ -939,7 +934,7 @@ function renderView() {
             if (!isAdmin) { changeCategory('Главное меню'); return; }
             adminViewContainer.classList.remove('hidden'); 
             adminViewContainer.classList.add('flex'); 
-            renderAdminPanel();
+            renderAdminPanel(); loadBanLog();
         } else {
             listViewContainer.classList.remove('hidden');
             if (currentCategory === 'Liked') document.getElementById('current-category-title').innerText = translations[currentLang].liked;
@@ -1032,7 +1027,7 @@ function renderTracksList() {
             const playlistIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>`;
             const shareIcon = `<svg class="w-4 h-4 md:w-5 md:h-5 text-gray-400 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>`;
 
-            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-28 md:w-32 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-cyan-300' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
+            return `<div class="group flex items-center p-2 rounded-xl hover:bg-white/10 transition-colors cursor-default border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div class="w-8 md:w-10 shrink-0 flex items-center justify-center"><button onclick="playTrack(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"><svg class="w-4 h-4 md:w-6 md:h-6 card-play-icon card-icon-${trackIdArg}" fill="currentColor" viewBox="0 0 24 24">${iconPath}</svg></button></div><div class="w-10 md:w-12 shrink-0 pr-2">${track.cover_url ? `<img src="${escapeHtml(track.cover_url)}" class="w-8 h-8 md:w-10 md:h-10 rounded-md object-cover shadow-sm">` : `<div class="w-8 h-8 md:w-10 md:h-10 rounded-md bg-gray-800 flex items-center justify-center"><svg class="w-4 h-4 md:w-5 md:h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`}</div><div class="flex-1 min-w-0 pr-2 md:pr-4"><h2 class="text-xs md:text-sm font-bold truncate">${escapeHtml(track.title)}</h2><p class="text-[10px] md:text-xs text-gray-400 truncate">${escapeHtml(track.artist || 'TrueEstimation')}</p></div><div class="w-16 md:w-24 text-center shrink-0"><div class="text-yellow-400 font-bold text-xs md:text-sm">${track.avgScore > 0 ? track.avgScore : '-'} <span class="text-[9px] md:text-[10px] text-gray-500 font-medium">/30</span></div><div class="text-[9px] md:text-[10px] text-gray-500">${track.votesCount} оц.</div></div><div class="w-32 md:w-40 text-center shrink-0 flex justify-center items-center gap-1"><button onclick="likeTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" title="Лайк">${heartIcon}</button><span class="text-[10px] md:text-xs font-bold ${track.userLiked ? 'text-cyan-300' : 'text-gray-400'} w-2 md:w-3 text-left">${track.likesCount > 0 ? track.likesCount : ''}</span><button onclick="queueTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-cyan-300 transition-colors ml-1" title="В очередь"><svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7m9-6v6m-3-3h6"/></svg></button><button onclick="openAddToPlaylistModal(${trackIdArg})" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="В плейлист">${playlistIcon}</button><button onclick="shareTrack(${trackIdArg}, event)" class="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-1" title="Поделиться">${shareIcon}</button></div><div class="w-20 md:w-24 text-right shrink-0"><button onclick="openRatingModal(${trackIdArg})" class="bg-white/5 hover:bg-white/20 border border-white/10 px-2 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold transition-all active:scale-95 opacity-0 group-hover:opacity-100 neon-btn">Оценить</button></div></div>`;
         });
         container.innerHTML = htmlParts.join('');
     } catch (err) {
@@ -1044,6 +1039,7 @@ function renderAdminPanel() {
     const tbody = document.getElementById('admin-users-list'); 
     const reportsTbody = document.getElementById('admin-reports-list');
     if(!tbody || !reportsTbody) return;
+    renderAdminTracks(); renderBanLog();
     
     // РЕНДЕР ПОЛЬЗОВАТЕЛЕЙ
     const q = (document.getElementById('admin-users-search')?.value || '').trim().toLowerCase();
@@ -1115,7 +1111,7 @@ function renderCommentsView() {
             container.innerHTML = `<div class="relative overflow-hidden bg-gradient-to-br from-cyan-900/20 to-gray-900/60 rounded-3xl border border-cyan-500/20 p-12 text-center shadow-[0_0_30px_rgba(6,182,212,0.1)] w-full max-w-2xl neon-border"><div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl"></div><p class="relative z-10 text-lg font-medium text-gray-300">${translations[currentLang].emptyComments}</p></div>`; return; 
         }
         const sortedComments = [...allCommentsData].sort((a, b) => { if (currentCommentsSort === 'newest') return new Date(b.created_at) - new Date(a.created_at); if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount; return new Date(b.created_at) - new Date(a.created_at); });
-        const htmlParts = sortedComments.map(comment => {
+        const htmlParts = sortedComments.slice(0, commentsLimit).map(comment => {
             const dateStr = new Date(comment.created_at).toLocaleDateString(currentLang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' });
             const heartIcon = comment.userLiked ? `<svg class="w-5 h-5 text-cyan-300 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` : `<svg class="w-5 h-5 text-gray-400 group-hover:text-cyan-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
             const deleteBtn = comment.isOwn ? `<button onclick="promptDeleteComment(${comment.id})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors ml-2" title="Удалить"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
@@ -1137,9 +1133,9 @@ function renderCommentsView() {
 
                 return `<div class="bg-black/20 rounded-xl p-3 mt-2 border border-white/5 flex gap-3"><div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden" style="${repBgStyle}">${repAvatarHtml}</div><div class="flex-1"><div class="flex justify-between items-baseline mb-1"><div class="flex items-center"><span onclick="openUserProfile('${rep.user_id}')" class="text-xs font-bold cursor-pointer hover:underline ${rep.isAdmin ? 'text-cyan-200' : 'text-cyan-400'}">${escapeHtml(rep.username)}</span>${repAdminBadge}</div><div class="flex items-center"><span class="text-[10px] text-gray-500 mr-2">${repDate}</span>${repDeleteBtn}</div></div><p class="text-sm text-gray-300 mb-1">${escapeHtml(rep.content)}</p><div class="flex items-center gap-3 mt-1"><button onclick="likeReply(${rep.id}, event)" class="flex items-center gap-1 hover:opacity-80">${repHeart}<span class="text-[11px] font-bold ${rep.userLiked ? 'text-cyan-300' : 'text-gray-400'}">${rep.likesCount > 0 ? rep.likesCount : ''}</span></button><button onclick="replyToUser(${comment.id}, '${escapeHtml(rep.username)}')" class="text-[11px] text-gray-500 hover:text-white transition-colors">Ответить</button></div></div></div>`;
             }).join('');
-            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-cyan-200' : 'text-white'}">${escapeHtml(comment.username)}</span>${levelChip(comment.user_id)}${authorAdminBadge}${banBadgeById(comment.user_id)}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-cyan-300' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button></div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
+            return `<div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex gap-4 transition-all hover:bg-white/10 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(6,182,212,0.1)]"><div onclick="openUserProfile('${comment.user_id}')" class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer hover:border-cyan-400 transition-colors" style="${commentBgStyle}">${commentAvatarHtml}</div><div class="flex-1 min-w-0"><div class="flex justify-between items-start mb-1"><div><div class="flex items-center mb-1"><span onclick="openUserProfile('${comment.user_id}')" class="text-sm font-bold cursor-pointer hover:underline ${comment.isAdmin ? 'text-cyan-200' : 'text-white'}">${escapeHtml(comment.username)}</span>${levelChip(comment.user_id)}${authorAdminBadge}${banBadgeById(comment.user_id)}<span class="text-[10px] text-gray-500 ml-2">${dateStr}</span></div><h4 class="text-xs text-gray-400 truncate cursor-pointer hover:underline hover:text-cyan-400" onclick="playTrack(${comment.track_id})">Трек: ${escapeHtml(comment.trackTitle)}</h4></div><div class="flex items-center">${deleteBtn}</div></div><p class="text-sm text-gray-200 leading-relaxed my-3">"${escapeHtml(comment.comment)}"</p><div class="flex items-center gap-3"><button onclick="likeComment(${comment.id}, event)" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all active:scale-95 group">${heartIcon}<span class="text-sm font-bold ${comment.userLiked ? 'text-cyan-300' : 'text-gray-400 group-hover:text-white'}">${comment.likesCount > 0 ? comment.likesCount : '0'}</span></button><div class="text-xs text-gray-400 bg-black/30 px-3 py-1.5 rounded-lg">Оценка: <span class="text-yellow-400 font-bold">${comment.score} / 30</span></div><button onclick="toggleReplyBox(${comment.id})" class="text-xs text-gray-400 hover:text-white transition-colors ml-2 font-medium">Ответить</button>${modButtons(comment)}</div><div class="mt-2">${repliesHtml}</div><div id="reply-box-${comment.id}" class="hidden mt-3 flex gap-2"><input type="text" id="reply-input-${comment.id}" placeholder="Написать ответ..." class="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500"><button onclick="submitReply(${comment.id})" class="bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg text-sm font-bold transition-colors neon-btn">Отправить</button></div></div></div>`;
         });
-        container.innerHTML = htmlParts.join('');
+        container.innerHTML = htmlParts.join('') + (sortedComments.length > commentsLimit ? `<button onclick="showMoreComments()" class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-bold text-cyan-300 transition-colors">Показать ещё (${sortedComments.length - commentsLimit})</button>` : '');
     } catch (err) {
         console.error("Comments Render Error:", err);
     }
@@ -1151,7 +1147,7 @@ updateVolumeUI();
 // ==========================================
 // УВЕДОМЛЕНИЯ
 // ==========================================
-const NOTIF_ICONS = { banned: '⛔', unbanned: '🔓', reply: '💬', like: '❤️', support_reply: '🛟', support_resolved: '✅', admin_granted: '🛡️', admin_revoked: '⚠️' };
+const NOTIF_ICONS = { follow: '👤', banned: '⛔', unbanned: '🔓', reply: '💬', like: '❤️', support_reply: '🛟', support_resolved: '✅', admin_granted: '🛡️', admin_revoked: '⚠️' };
 
 function timeAgo(d) {
     const s = Math.max(1, Math.floor((Date.now() - new Date(d).getTime()) / 1000));
@@ -1240,6 +1236,7 @@ window.openNotification = async function(id) {
     if (n.type === 'reply' || n.type === 'like') changeCategory('Комментарии');
     else if (n.type.startsWith('support')) { await refreshReports(); openSupportModal(); switchSupportTab('my'); }
     else if (n.type.startsWith('admin') && isAdmin) changeCategory('AdminPanel');
+    else if (n.type === 'follow' && n.actor_id) openUserProfile(n.actor_id);
 }
 
 window.markAllNotificationsRead = async function() {
@@ -1757,6 +1754,7 @@ window.renderAdminPanel = renderAdminPanel;
 // ПЛЕЕР: фон из обложки, лайк / плейлист / оценка прямо в панели
 // ==========================================
 function updatePlayerExtras(track) {
+    if (track) setMediaSession(track);
     const bg = document.getElementById('player-bg');
     if (bg) bg.style.backgroundImage = track && track.cover_url ? `url("${String(track.cover_url).replace(/"/g, '%22')}")` : 'none';
     const btn = document.getElementById('player-like-btn');
@@ -1771,3 +1769,319 @@ function refreshPlayerExtras() { if (currentTrackId) updatePlayerExtras(allTrack
 window.playerLike = function(e) { if (!currentTrackId) return; likeTrack(currentTrackId, e); refreshPlayerExtras(); };
 window.playerAddToPlaylist = function() { if (!currentTrackId) return; if (!currentUserId) return showToast('Войди!', 'error'); openAddToPlaylistModal(currentTrackId); };
 window.playerRate = function() { if (!currentTrackId) return; if (!currentUserId) return showToast('Войди!', 'error'); openRatingModal(currentTrackId); };
+
+// ==========================================
+// ПРИВАТНОСТЬ EMAIL (почты лежат в profile_private: видит админ и сам владелец)
+// ==========================================
+async function mergePrivateEmails() {
+    if (!currentUserId) { allProfilesData.forEach(p => { p.email = null; }); return; }
+    try {
+        const { data, error } = await supabase.from('profile_private').select('id,email');
+        if (error) return; // миграция ещё не запущена — остаётся старое поведение
+        const m = new Map((data || []).map(x => [x.id, x.email]));
+        allProfilesData.forEach(p => { p.email = m.get(p.id) || null; });
+    } catch (e) { console.error(e); }
+}
+
+// ==========================================
+// УПРАВЛЕНИЕ ТРЕКАМИ (добавление файлами, редактирование, удаление)
+// ==========================================
+const MEDIA_BUCKET = 'track-media';
+async function uploadMedia(file, folder, maxMb) {
+    if (!file) return null;
+    if (file.size > maxMb * 1048576) throw new Error(`Файл «${file.name}» больше ${maxMb} МБ`);
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+    const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { cacheControl: '31536000', contentType: file.type || undefined });
+    if (error) throw error;
+    return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+function mediaPathFromUrl(u) {
+    const m = String(u || '').match(/\/track-media\/([^?]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+}
+const $id = id => document.getElementById(id);
+
+window.adminAddTrack = async function() {
+    if (!isAdmin) return;
+    const title = $id('add-track-title').value.trim(), artist = $id('add-track-artist').value.trim(), category = $id('add-track-category').value.trim();
+    let audio_url = $id('add-track-audio').value.trim(), cover_url = $id('add-track-cover').value.trim();
+    const aFile = $id('add-track-audio-file').files[0], cFile = $id('add-track-cover-file').files[0];
+    if (!title || (!audio_url && !aFile)) return showToast('Название и аудио обязательны', 'error');
+    const btn = $id('add-track-btn'); btn.disabled = true; btn.classList.add('opacity-50'); btn.innerText = 'Загрузка…';
+    try {
+        if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
+        if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
+        const { error } = await supabase.from('tracks').insert({ title, artist, category, audio_url, cover_url });
+        if (error) throw error;
+        showToast('Трек добавлен!', 'success');
+        ['add-track-title', 'add-track-artist', 'add-track-category', 'add-track-audio', 'add-track-cover', 'add-track-audio-file', 'add-track-cover-file'].forEach(i => { $id(i).value = ''; });
+        await loadData();
+    } catch (e) { showToast('Ошибка: ' + (e.message || e), 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('opacity-50'); btn.innerText = 'Добавить трек'; }
+}
+
+function renderAdminTracks() {
+    const el = $id('admin-tracks-list'); if (!el) return;
+    const q = ($id('admin-tracks-search')?.value || '').trim().toLowerCase();
+    const list = allTracksData.filter(t => !q || t.title.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q));
+    el.innerHTML = list.length ? list.map(t => `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+        <td class="p-3 w-14">${coverImg(t, 'w-10 h-10 rounded-lg')}</td>
+        <td class="p-3"><div class="text-sm font-bold truncate max-w-[220px]">${escapeHtml(t.title)}</div><div class="text-xs text-gray-400 truncate max-w-[220px]">${escapeHtml(t.artist || '—')}</div></td>
+        <td class="p-3 text-xs text-cyan-300">${escapeHtml(t.category)}</td>
+        <td class="p-3 text-xs text-gray-400 whitespace-nowrap"><span class="text-yellow-400 font-bold">${t.avgScore || '—'}</span> · ${t.votesCount} оц.</td>
+        <td class="p-3 text-right whitespace-nowrap"><button onclick="openEditTrack(${Number(t.id)})" class="bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Изменить</button>
+        <button onclick="deleteTrack(${Number(t.id)})" class="ml-1 bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Удалить</button></td></tr>`).join('')
+        : `<tr><td class="p-4 text-center text-gray-400">Ничего не найдено</td></tr>`;
+}
+window.renderAdminTracks = renderAdminTracks;
+
+let editingTrackId = null;
+window.openEditTrack = function(id) {
+    const t = allTracksData.find(x => x.id === id); if (!t || !isAdmin) return;
+    editingTrackId = id;
+    $id('edit-track-title').value = t.title || ''; $id('edit-track-artist').value = t.artist || '';
+    $id('edit-track-category').value = t.category === 'Без категории' ? '' : t.category;
+    $id('edit-track-audio').value = t.audio_url || ''; $id('edit-track-cover').value = t.cover_url || '';
+    $id('edit-track-audio-file').value = ''; $id('edit-track-cover-file').value = '';
+    $id('edit-track-modal').classList.remove('hidden');
+}
+window.closeEditTrack = function() { $id('edit-track-modal').classList.add('hidden'); editingTrackId = null; }
+window.saveTrackEdit = async function() {
+    const t = allTracksData.find(x => x.id === editingTrackId); if (!t || !isAdmin) return;
+    const title = $id('edit-track-title').value.trim();
+    if (!title) return showToast('Название обязательно', 'error');
+    let audio_url = $id('edit-track-audio').value.trim(), cover_url = $id('edit-track-cover').value.trim();
+    const aFile = $id('edit-track-audio-file').files[0], cFile = $id('edit-track-cover-file').files[0];
+    const btn = $id('edit-track-save'); btn.disabled = true; btn.classList.add('opacity-50');
+    try {
+        if (aFile) audio_url = await uploadMedia(aFile, 'audio', 50);
+        if (cFile) cover_url = await uploadMedia(cFile, 'covers', 5);
+        if (!audio_url) throw new Error('Нужна ссылка на аудио или файл');
+        const { error } = await supabase.from('tracks').update({ title, artist: $id('edit-track-artist').value.trim(), category: $id('edit-track-category').value.trim() || null, audio_url, cover_url: cover_url || null }).eq('id', t.id);
+        if (error) throw error;
+        const old = [aFile && t.audio_url, cFile && t.cover_url].map(mediaPathFromUrl).filter(Boolean);
+        if (old.length) supabase.storage.from(MEDIA_BUCKET).remove(old).catch(() => {});
+        showToast('Сохранено', 'success'); closeEditTrack(); await loadData();
+    } catch (e) { showToast('Ошибка: ' + (e.message || e), 'error'); }
+    finally { btn.disabled = false; btn.classList.remove('opacity-50'); }
+}
+window.deleteTrack = function(id) {
+    const t = allTracksData.find(x => x.id === id); if (!t || !isAdmin) return;
+    showConfirm(`Удалить трек «${t.title}»? Его оценки и места в плейлистах тоже пропадут.`, async () => {
+        const { error } = await supabase.from('tracks').delete().eq('id', id);
+        if (error) return showToast('Ошибка: ' + error.message, 'error');
+        const paths = [t.audio_url, t.cover_url].map(mediaPathFromUrl).filter(Boolean);
+        if (paths.length) supabase.storage.from(MEDIA_BUCKET).remove(paths).catch(() => {});
+        playQueue = playQueue.filter(x => x !== id); renderQueuePanel();
+        showToast('Трек удалён', 'success'); await loadData();
+    }, 'delete');
+}
+
+// ---- журнал банов ----
+let banLogData = [];
+async function loadBanLog() {
+    if (!isAdmin) return;
+    const { data, error } = await supabase.from('ban_log').select('*').order('created_at', { ascending: false }).limit(30);
+    if (!error) { banLogData = data || []; renderBanLog(); }
+}
+function renderBanLog() {
+    const el = $id('admin-banlog-list'); if (!el) return;
+    const nm = id => (allProfilesData.find(p => p.id === id) || {}).username || 'Удалён';
+    el.innerHTML = banLogData.length ? banLogData.map(l => `<tr class="border-b border-white/5 text-sm">
+        <td class="p-3 text-xs text-gray-400 whitespace-nowrap">${fmtDate(l.created_at)}</td><td class="p-3">${escapeHtml(l.admin_id ? nm(l.admin_id) : 'система')}</td>
+        <td class="p-3">${l.action === 'ban' ? '<span class="ban-badge">БАН</span>' : '<span class="text-cyan-300 font-bold text-xs">РАЗБАН</span>'}</td>
+        <td class="p-3 font-bold">${escapeHtml(nm(l.target_id))}</td>
+        <td class="p-3 text-xs text-gray-400">${l.action === 'ban' ? (l.banned_until ? 'до ' + fmtDate(l.banned_until) : 'навсегда') + (l.reason ? ' · ' + escapeHtml(l.reason) : '') : ''}</td></tr>`).join('')
+        : `<tr><td colspan="5" class="p-4 text-center text-gray-400">Банов пока не было</td></tr>`;
+}
+
+// ==========================================
+// МОДЕРАЦИЯ КОММЕНТАРИЕВ
+// ==========================================
+let pendingReportRatingId = null; let commentsLimit = 20;
+window.showMoreComments = function() { commentsLimit += 20; renderCommentsView(); };
+function modButtons(c) {
+    let out = '';
+    if (c.hidden) out += `<span class="ban-badge ml-2" title="Скрыт после жалоб">СКРЫТ</span>`;
+    if (currentUserId && c.user_id !== currentUserId)
+        out += `<button onclick="reportComment(${c.id})" class="text-xs text-gray-500 hover:text-red-400 transition-colors ml-2 font-medium">Пожаловаться</button>`;
+    if (isAdmin)
+        out += `<button onclick="toggleHideComment(${c.id}, ${!c.hidden})" class="text-xs text-gray-500 hover:text-cyan-300 transition-colors ml-2 font-medium">${c.hidden ? 'Показать' : 'Скрыть'}</button>`;
+    return out;
+}
+window.reportComment = function(ratingId) {
+    const c = allCommentsData.find(x => x.id === ratingId); if (!c) return;
+    if (guardBan && isBannedSelf()) { /* забаненный может обратиться в поддержку */ }
+    const quote = String(c.comment).slice(0, 200);
+    openSupportModal({ type: 'report', target: c.username, ratingId, message: `Жалоба на комментарий к «${c.trackTitle}»: «${quote}»\nПричина: ` });
+}
+window.toggleHideComment = async function(id, hide) {
+    if (!isAdmin) return;
+    const { error } = await supabase.from('ratings').update({ hidden: hide }).eq('id', id);
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    showToast(hide ? 'Комментарий скрыт' : 'Комментарий снова виден', 'success'); await loadData();
+}
+
+// ==========================================
+// ПЛЕЕР: очередь, горячие клавиши, управление с экрана блокировки
+// ==========================================
+let playQueue = [];
+window.queueTrack = function(id, e) {
+    if (e) e.stopPropagation();
+    if (!currentTrackId) { playTrack(id); return; }
+    playQueue.push(id); renderQueuePanel(); showToast('Добавлено в очередь', 'success');
+}
+window.removeFromQueue = function(i) { playQueue.splice(i, 1); renderQueuePanel(); }
+window.clearQueue = function() { playQueue = []; renderQueuePanel(); }
+window.playQueueItem = function(i) { const id = playQueue.splice(i, 1)[0]; renderQueuePanel(); if (id === currentTrackId) { globalAudio.currentTime = 0; globalAudio.play(); } else if (id) playTrack(id); }
+window.toggleQueuePanel = function() {
+    const p = $id('queue-panel'); p.classList.toggle('hidden'); p.classList.toggle('flex', !p.classList.contains('hidden')); renderQueuePanel();
+}
+function renderQueuePanel() {
+    const cnt = $id('queue-count'), list = $id('queue-list');
+    if (cnt) { cnt.innerText = playQueue.length; cnt.classList.toggle('hidden', !playQueue.length); }
+    if (!list) return;
+    const items = playQueue.map(id => allTracksData.find(t => t.id === id)).map((t, i) => t ? `<div class="flex items-center gap-3 px-3 py-2 hover:bg-white/5 group">
+        ${coverImg(t, 'w-9 h-9 rounded-md flex-shrink-0')}<button onclick="playQueueItem(${i})" class="flex-1 min-w-0 text-left"><div class="text-sm font-bold truncate">${escapeHtml(t.title)}</div><div class="text-[11px] text-gray-400 truncate">${escapeHtml(t.artist || '')}</div></button>
+        <button onclick="removeFromQueue(${i})" class="text-gray-500 hover:text-red-400 px-1" title="Убрать">✕</button></div>` : '').join('');
+    list.innerHTML = items || `<div class="p-6 text-center text-sm text-gray-400">Очередь пуста.<br>Нажми значок «≡+» у трека, чтобы добавить.</div>`;
+}
+
+document.addEventListener('keydown', e => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (document.querySelector('.fixed.inset-0:not(.hidden)[id$="-modal"]')) return; // открыта модалка
+    if (!currentTrackId) return;
+    switch (e.code) {
+        case 'Space': e.preventDefault(); toggleGlobalPlay(); break;
+        case 'ArrowRight': e.preventDefault(); if (e.shiftKey) playNext(); else globalAudio.currentTime = Math.min((globalAudio.duration || 1e9), globalAudio.currentTime + 5); break;
+        case 'ArrowLeft': e.preventDefault(); if (e.shiftKey) playPrev(); else globalAudio.currentTime = Math.max(0, globalAudio.currentTime - 5); break;
+        case 'ArrowUp': e.preventDefault(); changeVolume(Math.min(1, globalAudio.volume + 0.05)); break;
+        case 'ArrowDown': e.preventDefault(); changeVolume(Math.max(0, globalAudio.volume - 0.05)); break;
+        case 'KeyM': toggleMute(); break;
+    }
+});
+
+function setMediaSession(track) {
+    if (!('mediaSession' in navigator) || !track) return;
+    try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.artist || 'TrueEstimation', album: 'TrueEstimation', artwork: track.cover_url ? [{ src: track.cover_url, sizes: '512x512' }] : [] });
+    } catch (e) {}
+}
+(function initMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const set = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+    set('play', () => globalAudio.play()); set('pause', () => globalAudio.pause());
+    set('previoustrack', () => playPrev()); set('nexttrack', () => playNext());
+    set('seekto', d => { if (d.seekTime != null) globalAudio.currentTime = d.seekTime; });
+    set('seekbackward', d => { globalAudio.currentTime = Math.max(0, globalAudio.currentTime - (d.seekOffset || 10)); });
+    set('seekforward', d => { globalAudio.currentTime = Math.min(globalAudio.duration || 1e9, globalAudio.currentTime + (d.seekOffset || 10)); });
+    globalAudio.addEventListener('play', () => { navigator.mediaSession.playbackState = 'playing'; });
+    globalAudio.addEventListener('pause', () => { navigator.mediaSession.playbackState = 'paused'; });
+    globalAudio.addEventListener('timeupdate', () => {
+        if (globalAudio.duration && isFinite(globalAudio.duration)) { try { navigator.mediaSession.setPositionState({ duration: globalAudio.duration, position: globalAudio.currentTime, playbackRate: globalAudio.playbackRate }); } catch (e) {} }
+    });
+})();
+
+// ==========================================
+// СОЦИАЛЬНОЕ: подписки, любимые треки, «трек недели», «сейчас слушают», лента
+// ==========================================
+let allFollowsData = [];
+async function loadFollows() {
+    try { const { data, error } = await supabase.from('follows').select('*'); allFollowsData = error ? [] : (data || []); } catch (e) { allFollowsData = []; }
+}
+function socialRowHtml(p) {
+    const followers = allFollowsData.filter(f => f.followed_id === p.id).length, following = allFollowsData.filter(f => f.follower_id === p.id).length;
+    const iFollow = !!currentUserId && allFollowsData.some(f => f.follower_id === currentUserId && f.followed_id === p.id);
+    const btn = currentUserId && p.id !== currentUserId
+        ? `<button onclick="toggleFollow('${p.id}')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${iFollow ? 'bg-white/10 text-gray-300 hover:bg-white/20' : 'bg-cyan-500 text-black neon-btn'}">${iFollow ? 'Отписаться' : 'Подписаться'}</button>` : '';
+    return `<div class="flex items-center justify-between mt-3 text-sm"><div class="text-gray-400"><b class="text-white">${followers}</b> подписчиков · <b class="text-white">${following}</b> подписок</div>${btn}</div>`;
+}
+function favoritesHtml(p) {
+    const ids = new Set(allTrackLikesData.filter(l => l.user_id === p.id).map(l => l.track_id));
+    const favs = allTracksData.filter(t => ids.has(t.id)).sort((a, b) => b.avgScore - a.avgScore).slice(0, 6);
+    if (!favs.length) return '';
+    return `<h4 class="text-sm font-bold text-gray-300 mt-6 mb-2">Любимые треки <span class="text-gray-500 font-normal">${ids.size}</span></h4>
+    <div class="grid grid-cols-3 gap-2">${favs.map(t => `<button onclick="closeUserProfile(); playTrack(${Number(t.id)})" class="text-left group">${coverImg(t, 'w-full aspect-square rounded-xl group-hover:shadow-[0_0_16px_rgba(34,211,238,0.4)] transition-shadow')}<div class="text-[11px] font-bold truncate mt-1">${escapeHtml(t.title)}</div></button>`).join('')}</div>`;
+}
+window.toggleFollow = async function(uid) {
+    if (!currentUserId) return showToast('Войди!', 'error');
+    if (guardBan()) return;
+    const has = allFollowsData.some(f => f.follower_id === currentUserId && f.followed_id === uid);
+    const { error } = has ? await supabase.from('follows').delete().match({ follower_id: currentUserId, followed_id: uid })
+                          : await supabase.from('follows').insert({ follower_id: currentUserId, followed_id: uid });
+    if (error) return showToast('Ошибка: ' + error.message, 'error');
+    allFollowsData = has ? allFollowsData.filter(f => !(f.follower_id === currentUserId && f.followed_id === uid)) : [...allFollowsData, { follower_id: currentUserId, followed_id: uid, created_at: new Date().toISOString() }];
+    openUserProfile(uid); if (currentCategory === 'Главное меню') renderHomeExtras();
+}
+
+function weeklyTopTrack() {
+    const since = Date.now() - 7 * 864e5, by = new Map();
+    allRatingsData.forEach(r => { if (new Date(r.created_at || 0).getTime() < since) return; const a = by.get(r.track_id) || { sum: 0, n: 0 }; a.sum += r.score || 0; a.n++; by.set(r.track_id, a); });
+    const arr = [...by.values()], N = arr.reduce((x, a) => x + a.n, 0); if (!N) return null;
+    const C = arr.reduce((x, a) => x + a.sum, 0) / N, M = 2; let best = null;
+    by.forEach((a, id) => { const avg = a.sum / a.n, w = (a.n / (a.n + M)) * avg + (M / (a.n + M)) * C; if (!best || w > best.w) best = { id, avg, n: a.n, w }; });
+    const t = allTracksData.find(x => x.id === best.id); return t ? { t, avg: best.avg, n: best.n } : null;
+}
+
+let listeners = [], presenceChannel = null;
+const hideListening = () => localStorage.getItem('te_hide_listening') === '1';
+window.toggleHideListening = function() { localStorage.setItem('te_hide_listening', hideListening() ? '0' : '1'); announceListening(!globalAudio.paused); renderHomeExtras(); };
+function announceListening(on) {
+    if (!presenceChannel) return;
+    try {
+        if (on && currentTrackId && !hideListening()) presenceChannel.track({ track_id: currentTrackId, name: currentUserProfile ? currentUserProfile.username : null, uid: currentUserId || null, t: Date.now() });
+        else presenceChannel.untrack();
+    } catch (e) {}
+}
+(function initPresence() {
+    try {
+        presenceChannel = supabase.channel('now-listening', { config: { presence: { key: 'v_' + Math.random().toString(36).slice(2, 10) } } });
+        presenceChannel.on('presence', { event: 'sync' }, () => {
+            listeners = Object.values(presenceChannel.presenceState()).map(a => a[a.length - 1]).filter(x => x && x.track_id);
+            if (currentCategory === 'Главное меню') renderHomeExtras();
+        }).subscribe(st => { if (st === 'SUBSCRIBED' && !globalAudio.paused) announceListening(true); });
+        globalAudio.addEventListener('play', () => announceListening(true));
+        globalAudio.addEventListener('pause', () => announceListening(false));
+        globalAudio.addEventListener('ended', () => announceListening(false));
+    } catch (e) { console.error(e); }
+})();
+
+function renderHomeExtras() {
+    const el = $id('home-extras'); if (!el) return;
+    let html = '';
+    const wk = weeklyTopTrack();
+    if (wk) html += `<div class="ice-card p-4 flex items-center gap-4"><div class="relative">${coverImg(wk.t, 'w-20 h-20 rounded-xl shadow-[0_0_20px_rgba(34,211,238,0.3)]')}</div>
+        <div class="flex-1 min-w-0"><div class="text-[11px] font-bold tracking-widest uppercase text-cyan-300 neon-text">Трек недели</div><div class="text-lg font-extrabold truncate">${escapeHtml(wk.t.title)}</div><div class="text-xs text-gray-400 truncate">${escapeHtml(wk.t.artist || 'TrueEstimation')}</div></div>
+        <div class="text-right"><div class="text-yellow-400 font-extrabold text-xl">${wk.avg.toFixed(1)}<span class="text-xs text-gray-400 font-medium"> /30</span></div><div class="text-[10px] text-gray-400">${wk.n} оц. за 7 дней</div></div>
+        <button onclick="playTrack(${Number(wk.t.id)})" class="w-11 h-11 rounded-full bg-cyan-500 text-black font-bold neon-btn flex-shrink-0">▶</button></div>`;
+
+    const act = listeners.map(l => ({ ...l, t: allTracksData.find(x => x.id === l.track_id) })).filter(x => x.t);
+    html += `<div class="ice-card p-4"><div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold text-gray-200 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-cyan-300 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.9)]"></span>Сейчас слушают <span class="text-gray-500 font-normal">${act.length}</span></h3>
+        <button onclick="toggleHideListening()" class="text-[11px] text-gray-500 hover:text-cyan-300">${hideListening() ? 'Показывать меня' : 'Скрыть меня'}</button></div>`
+        + (act.length ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${act.slice(0, 8).map(x => {
+            const pr = x.uid && allProfilesData.find(p => p.id === x.uid);
+            return `<button onclick="playTrack(${Number(x.t.id)})" class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 text-left transition-colors">${pr ? avatarMarkup(pr, 'w-8 h-8') : '<div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">?</div>'}
+            <div class="min-w-0"><div class="text-xs font-bold truncate">${escapeHtml(x.name || 'Гость')}</div><div class="text-[11px] text-gray-400 truncate">♪ ${escapeHtml(x.t.title)}</div></div></button>`; }).join('')}</div>`
+            : `<p class="text-xs text-gray-500">Пока тихо. Включи трек — и ты первый в списке.</p>`) + `</div>`;
+
+    if (currentUserId) {
+        const following = new Set(allFollowsData.filter(f => f.follower_id === currentUserId).map(f => f.followed_id));
+        const feed = allRatingsData.filter(r => following.has(r.user_id)).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 6);
+        html += `<div class="ice-card p-4"><h3 class="text-sm font-bold text-gray-200 mb-3">Лента подписок</h3>` + (feed.length ? `<div class="space-y-1">${feed.map(r => {
+            const pr = allProfilesData.find(p => p.id === r.user_id), t = allTracksData.find(x => x.id === r.track_id); if (!pr || !t) return '';
+            return `<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors"><button onclick="openUserProfile('${pr.id}')">${avatarMarkup(pr, 'w-8 h-8')}</button>
+            <button onclick="playTrack(${Number(t.id)})" class="flex-1 min-w-0 text-left"><div class="text-xs truncate"><b>${escapeHtml(pr.username)}</b> оценил(а) <span class="text-cyan-300">${escapeHtml(t.title)}</span></div>${r.comment ? `<div class="text-[11px] text-gray-400 truncate">«${escapeHtml(r.comment)}»</div>` : ''}</button>
+            <div class="text-yellow-400 font-bold text-sm">${r.score}</div></div>`; }).join('')}</div>`
+            : `<p class="text-xs text-gray-500">${following.size ? 'Твои подписки пока ничего не оценили.' : 'Подпишись на кого-нибудь в рейтинге пользователей — их оценки появятся здесь.'}</p>`) + `</div>`;
+    }
+    el.innerHTML = html;
+}
+
+// ==========================================
+// PWA
+// ==========================================
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
