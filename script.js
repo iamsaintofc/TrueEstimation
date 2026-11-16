@@ -3,6 +3,10 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const supabaseUrl = 'https://szmwwykgtwdosauounds.supabase.co'; 
 const supabaseKey = 'sb_publishable_0r_O4raj-GlUeg3p8E62TQ_X3gpfZER'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
+// пришли по ссылке из письма (подтверждение почты)? запоминаем до очистки адреса
+const _hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+let cameFromEmailLink = /^(signup|email|magiclink|invite|email_change)$/.test(_hashParams.get('type') || '');
+const emailLinkError = _hashParams.get('error_description');
 const MASTER_ADMIN_EMAIL = 'zahavalgovno777@gmail.com';
 
 const translations = {
@@ -69,9 +73,15 @@ async function initApp() {
     }
 }
 initApp();
+if (emailLinkError) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => showToast('Ссылка из письма недействительна или устарела. Войди заново, письмо отправится повторно', 'error'), 600); }
 
 supabase.auth.onAuthStateChange(async (event, session) => { 
     if (event === 'SIGNED_IN') { 
+        if (cameFromEmailLink) {
+            cameFromEmailLink = false;
+            history.replaceState(null, '', location.pathname + location.search);
+            showToast('Почта подтверждена! Добро пожаловать', 'success');
+        }
         currentUserId = session.user.id; 
         await updateProfileUI(); 
         await loadData(); 
@@ -608,9 +618,9 @@ window.handleLogin = async function() {
         let { data, error } = await supabase.auth.signInWithPassword({ email, password });
         
         if (error && error.message.includes('Invalid login credentials')) {
-            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
             if (signUpError) throw signUpError;
-            showToast('Аккаунт создан!', 'success'); closeLoginModal();
+            showToast(signUpData.session ? 'Аккаунт создан!' : 'Аккаунт создан! Подтверди почту по ссылке из письма', 'success'); closeLoginModal();
         } else if (error) { 
             throw error;
         } else { 
@@ -618,7 +628,8 @@ window.handleLogin = async function() {
             closeLoginModal(); 
         }
     } catch (err) {
-        showToast('Ошибка: ' + err.message, 'error');
+        const msg = /email not confirmed/i.test(err.message) ? 'Почта не подтверждена. Открой письмо и перейди по ссылке' : err.message;
+        showToast('Ошибка: ' + msg, 'error');
     }
 }
 
